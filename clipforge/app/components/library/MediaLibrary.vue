@@ -17,7 +17,7 @@
 			</div>
 
 			<div v-else class="media-grid">
-				<MediaThumbnail
+				<LibraryMediaThumbnail
 					v-for="file in mediaFiles"
 					:key="file.id"
 					:file="file"
