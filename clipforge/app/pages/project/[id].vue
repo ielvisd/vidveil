@@ -119,14 +119,19 @@
 						<h2>No Video Selected</h2>
 						<p>Import media or select a clip to preview</p>
 					</div>
+				<div v-else class="video-wrapper">
 					<video
-						v-else
 						ref="videoPlayer"
 						:src="activeClip.src"
 						class="preview-video"
+						:style="pipConfig ? getShapeCSS() : ''"
 						controls
 						@loadedmetadata="handleVideoLoaded"
 					/>
+					<div v-if="pipConfig" class="pip-indicator">
+						<span>PiP: {{ pipConfig.shape }}</span>
+					</div>
+				</div>
 				</div>
 
 				<!-- Playback Controls -->
@@ -230,6 +235,7 @@ const { clips, addClip, fetchClips } = useClips()
 const { exportVideo } = useExport()
 const { currentTime, duration, isPlaying, togglePlay, seek, formatTime, setPlayheadPosition, initializePlayer } = usePlayer()
 const { zoomLevel, zoomIn, zoomOut } = useTimeline()
+const { pipConfig, applyShape: applyPipShape, getShapeCSS } = usePipShape()
 
 const selectedClip = ref<any>(null)
 const activeClip = ref<any>(null)
@@ -335,8 +341,10 @@ const startRecording = () => {
 
 const applyShape = (shape: string) => {
 	if (selectedClip.value) {
-		console.log(`Applying ${shape} shape to clip:`, selectedClip.value.id)
-		// TODO: Implement PiP shape application
+		applyPipShape(shape as any, selectedClip.value.id)
+	} else {
+		// Apply to active video if no clip selected
+		applyPipShape(shape as any)
 	}
 }
 
@@ -562,6 +570,12 @@ const handleExport = async () => {
 	color: rgb(156 163 175);
 }
 
+.video-wrapper {
+	position: relative;
+	max-width: 100%;
+	max-height: 100%;
+}
+
 .preview-video {
 	max-width: 100%;
 	max-height: 100%;
@@ -569,6 +583,20 @@ const handleExport = async () => {
 	height: auto;
 	border-radius: 0.5rem;
 	box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.4);
+	transition: clip-path 0.3s ease;
+}
+
+.pip-indicator {
+	position: absolute;
+	top: 1rem;
+	right: 1rem;
+	background-color: rgb(59 130 246);
+	color: white;
+	padding: 0.5rem 1rem;
+	border-radius: 0.375rem;
+	font-size: 0.875rem;
+	font-weight: 500;
+	box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.3);
 }
 
 .playback-controls {
