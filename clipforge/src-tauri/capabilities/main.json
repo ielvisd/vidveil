@@ -39,6 +39,9 @@
 		"os:allow-locale",
 		"fs:allow-document-read",
 		"fs:allow-document-write",
+		"fs:allow-read-all",
+		"fs:allow-write-all",
+		"fs:allow-search",
 		"store:default",
 		"core:webview:allow-create-webview",
 		"core:webview:allow-create-webview-window"

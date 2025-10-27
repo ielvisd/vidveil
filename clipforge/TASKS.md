@@ -106,13 +106,13 @@ graph TB
 **Description:** Install all core dependencies for video editing, timeline, and processing.
 
 **Tasks:**
-- [ ] Add `@ffmpeg/ffmpeg` for video processing
-- [ ] Add `konva` and `vue-konva` for timeline canvas
-- [ ] Add `@mediapipe/selfie` for face segmentation
-- [ ] Add `plyr` for video player controls
-- [ ] Add `@supabase/supabase-js` for backend
-- [ ] Add `ai` (Vercel AI SDK) for AI features
-- [ ] Add `openai` for OpenAI integration
+- [x] Add `@ffmpeg/ffmpeg` for video processing
+- [x] Add `konva` and `vue-konva` for timeline canvas
+- [x] Add `@tensorflow/tfjs` and `@tensorflow-models/body-segmentation` for face/body segmentation (replaces @mediapipe/selfie)
+- [x] Add `plyr` for video player controls
+- [x] Add `@supabase/supabase-js` for backend
+- [x] Add `ai` (Vercel AI SDK) for AI features
+- [x] Add `openai` for OpenAI integration
 - [ ] Configure Tauri permissions in `src-tauri/capabilities/main.json`
 
 **Files to Modify:**

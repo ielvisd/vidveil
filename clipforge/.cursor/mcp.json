@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "socketsecurity": {
+      "command": "node",
+      "args": ["node_modules/@socketsecurity/mcp/dist/index.js"],
+      "description": "Socket Security MCP for dependency scanning and npm package management"
+    }
+  }
+}
