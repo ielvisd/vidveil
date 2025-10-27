@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS projects (
 CREATE TABLE IF NOT EXISTS clips (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  name TEXT NOT NULL DEFAULT 'Untitled Clip',
   src TEXT NOT NULL,
   start_time NUMERIC DEFAULT 0,
   end_time NUMERIC,
