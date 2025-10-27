@@ -10,12 +10,14 @@
 			/>
 
 			<div v-if="!src" class="empty-state">
-				<UIcon name="i-heroicons-video-camera" class="text-6xl text-gray-400 mb-4" />
+				<svg class="w-16 h-16 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+				</svg>
 				<p class="text-gray-500">No video selected</p>
 			</div>
 		</div>
 
-		<Controls
+		<PlayerControls
 			v-if="src && isLoaded"
 			:current-time="currentTime"
 			:duration="duration"
@@ -85,20 +87,33 @@ watch(() => props.src, () => {
 
 <style scoped>
 .video-preview {
-	w-full h-full flex flex-col;
+	width: 100%;
+	height: 100%;
+	display: flex;
+	flex-direction: column;
 }
 
 .player-container {
-	flex-1 bg-black rounded-t-lg overflow-hidden relative;
-	aspect-ratio: 16/9;
+	flex: 1;
+	background-color: #000;
+	border-radius: 0.5rem 0.5rem 0 0;
+	overflow: hidden;
+	position: relative;
+	aspect-ratio: 16 / 9;
 }
 
 .video-player {
-	w-full h-full object-contain;
+	width: 100%;
+	height: 100%;
+	object-fit: contain;
 }
 
 .empty-state {
-	absolute inset-0 flex flex-col items-center justify-center;
+	position: absolute;
+	inset: 0;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
 }
 </style>
-
