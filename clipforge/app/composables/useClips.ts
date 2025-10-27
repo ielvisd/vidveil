@@ -24,16 +24,41 @@ export const useClips = () => {
 
 			if (!user.value) throw new Error('Not authenticated')
 
-		const clipData = {
-			project_id: projectId,
-			name: metadata.name || 'Untitled Clip',
-			src,
-			duration: metadata.duration || 0,
-			start_time: 0,
-			end_time: metadata.duration || 0,
-			track: 1,
-			metadata
-		}
+			// Upload blob to Supabase Storage if it's a blob URL
+			let fileUrl = src
+			if (src.startsWith('blob:')) {
+				const blob = await fetch(src).then(r => r.blob())
+				const fileName = `${projectId}/${Date.now()}-${metadata.name || 'clip'}.webm`
+				
+				const { data: uploadData, error: uploadError } = await supabase
+					.storage
+					.from('clips')
+					.upload(fileName, blob, {
+						contentType: blob.type,
+						upsert: false
+					})
+
+				if (uploadError) throw uploadError
+
+				// Get public URL
+				const { data: urlData } = supabase
+					.storage
+					.from('clips')
+					.getPublicUrl(fileName)
+
+				fileUrl = urlData.publicUrl
+			}
+
+			const clipData = {
+				project_id: projectId,
+				name: metadata.name || 'Untitled Clip',
+				src: fileUrl,
+				duration: metadata.duration || 0,
+				start_time: 0,
+				end_time: metadata.duration || 0,
+				track: 1,
+				metadata
+			}
 
 			const { data, error } = await supabase
 				.from('clips')
