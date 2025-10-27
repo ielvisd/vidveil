@@ -81,24 +81,48 @@ const handleFileSelect = async (event: Event) => {
 
 <style scoped>
 .media-library {
-	w-full h-full;
+	width: 100%;
+	height: 100%;
 }
 
 .drop-zone {
-	border-2 border-dashed border-gray-300 rounded-lg p-8 transition-colors;
+	border: 2px dashed;
+	border-color: rgb(209 213 219);
+	border-radius: 0.5rem;
+	padding: 2rem;
+	transition: colors;
 	min-height: 400px;
 }
 
 .drop-zone.dragging {
-	border-blue-500 bg-blue-50;
+	border-color: rgb(59 130 246);
+	background-color: rgb(239 246 255);
 }
 
 .empty-state {
-	flex flex-col items-center justify-center h-full;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	height: 100%;
 }
 
 .media-grid {
-	grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4;
+	display: grid;
+	grid-template-columns: repeat(2, 1fr);
+	gap: 1rem;
+}
+
+@media (min-width: 768px) {
+	.media-grid {
+		grid-template-columns: repeat(3, 1fr);
+	}
+}
+
+@media (min-width: 1024px) {
+	.media-grid {
+		grid-template-columns: repeat(4, 1fr);
+	}
 }
 </style>
 
