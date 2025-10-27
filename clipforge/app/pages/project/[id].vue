@@ -328,6 +328,14 @@
 				</div>
 			</div>
 		</div>
+
+		<!-- Export Dialog -->
+		<ExportExportDialog
+			v-if="showExportDialog"
+			:clips="clips"
+			:project-name="project?.name"
+			@close="showExportDialog = false"
+		/>
 	</div>
 </template>
 
@@ -337,7 +345,7 @@ const projectId = route.params.id as string
 
 const { currentProject, selectProject } = useProject()
 const { clips, addClip, fetchClips, loading: clipsLoading } = useClips()
-const { exportVideo } = useExport()
+const { isExporting, exportProgress, exportVideo } = useExport()
 const { currentTime, duration, isPlaying, togglePlay, seek, formatTime, setPlayheadPosition, initializePlayer } = usePlayer()
 const { zoomLevel, zoomIn, zoomOut, setZoom } = useTimeline()
 const { pipConfig, webcamClipId, applyShape: applyPipShape, updatePosition, removePip: removePipShape, setWebcamClip } = usePipShape()
@@ -355,6 +363,7 @@ const loading = ref(true)
 const error = ref<string | null>(null)
 const containerWidth = ref(0)
 const containerHeight = ref(0)
+const showExportDialog = ref(false)
 
 const canExport = computed(() => clips.value.length > 0)
 const shapes = ['circle', 'square', 'heart', 'star', 'hexagon', 'rounded']
@@ -610,18 +619,9 @@ const removeClip = async () => {
 	activeClip.value = null
 }
 
-const handleExport = async () => {
+const handleExport = () => {
 	if (!canExport.value) return
-	
-	try {
-		await exportVideo(
-			clips.value,
-			`${project.value?.name || 'export'}.mp4`,
-			{ resolution: '1080p', quality: 'high', format: 'mp4' }
-		)
-	} catch (error) {
-		console.error('Export failed:', error)
-	}
+	showExportDialog.value = true
 }
 </script>
 
