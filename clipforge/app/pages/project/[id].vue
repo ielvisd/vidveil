@@ -1,5 +1,16 @@
 <template>
 	<div class="project-editor">
+		<!-- Error Toast -->
+		<div v-if="error" class="error-toast">
+			<div class="error-content">
+				<i class="i-heroicons-exclamation-triangle text-xl" />
+				<span>{{ error }}</span>
+				<button @click="error = null" class="error-close">
+					<i class="i-heroicons-x-mark" />
+				</button>
+			</div>
+		</div>
+
 		<!-- Top Bar -->
 		<div class="top-bar">
 			<UButton 
@@ -50,7 +61,10 @@
 					<template #header>
 						<h3>Media Library</h3>
 					</template>
-					<div v-if="clips.length === 0" class="empty-state">
+					<div v-if="loading" class="loading-state">
+						<SharedLoadingSpinner size="sm" message="Loading clips..." />
+					</div>
+					<div v-else-if="clips.length === 0" class="empty-state">
 						<p>No clips yet</p>
 						<p class="text-sm text-gray-500">Import or record to get started</p>
 					</div>
@@ -310,7 +324,7 @@ const route = useRoute()
 const projectId = route.params.id as string
 
 const { currentProject, selectProject } = useProject()
-const { clips, addClip, fetchClips } = useClips()
+const { clips, addClip, fetchClips, loading: clipsLoading } = useClips()
 const { exportVideo } = useExport()
 const { currentTime, duration, isPlaying, togglePlay, seek, formatTime, setPlayheadPosition, initializePlayer } = usePlayer()
 const { zoomLevel, zoomIn, zoomOut, setZoom } = useTimeline()
@@ -323,6 +337,8 @@ const videoPlayer = ref<HTMLVideoElement | null>(null)
 const trackContainer = ref<HTMLDivElement | null>(null)
 const isMuted = ref(false)
 const volume = ref(100)
+const loading = ref(true)
+const error = ref<string | null>(null)
 
 const canExport = computed(() => clips.value.length > 0)
 const shapes = ['circle', 'square', 'heart', 'star', 'hexagon', 'rounded']
@@ -437,13 +453,32 @@ onMounted(async () => {
 	window.addEventListener('keydown', handleKeyPress)
 	
 	if (projectId) {
-		const result = await selectProject(projectId)
-		project.value = result.project
-		await fetchClips(projectId)
-		
-		// Auto-select first clip if available
-		if (clips.value.length > 0) {
-			selectClip(clips.value[0])
+		try {
+			loading.value = true
+			error.value = null
+
+			const result = await selectProject(projectId)
+			if (result.error) {
+				error.value = result.error
+				return
+			}
+
+			project.value = result.project
+			
+			const clipsResult = await fetchClips(projectId)
+			if (clipsResult.error) {
+				error.value = clipsResult.error
+				return
+			}
+			
+			// Auto-select first clip if available
+			if (clips.value.length > 0) {
+				selectClip(clips.value[0])
+			}
+		} catch (err: any) {
+			error.value = err.message || 'Failed to load project'
+		} finally {
+			loading.value = false
 		}
 	}
 })
@@ -588,6 +623,61 @@ const handleExport = async () => {
 	text-align: center;
 	padding: 2rem 1rem;
 	color: rgb(156 163 175);
+}
+
+.loading-state {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 2rem 1rem;
+}
+
+.error-toast {
+	position: fixed;
+	top: 1rem;
+	right: 1rem;
+	z-index: 1000;
+	animation: slideInRight 0.3s ease;
+}
+
+@keyframes slideInRight {
+	from {
+		transform: translateX(100%);
+		opacity: 0;
+	}
+	to {
+		transform: translateX(0);
+		opacity: 1;
+	}
+}
+
+.error-content {
+	display: flex;
+	align-items: center;
+	gap: 0.75rem;
+	padding: 1rem 1.5rem;
+	background-color: rgb(153 27 27);
+	color: white;
+	border-radius: 0.5rem;
+	box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.3);
+	max-width: 400px;
+}
+
+.error-close {
+	background: none;
+	border: none;
+	color: white;
+	cursor: pointer;
+	padding: 0.25rem;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	border-radius: 0.25rem;
+	transition: background-color 0.2s;
+}
+
+.error-close:hover {
+	background-color: rgba(255, 255, 255, 0.1);
 }
 
 .clips-list {
