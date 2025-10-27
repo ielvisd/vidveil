@@ -239,13 +239,13 @@ graph TB
 **Description:** Build hybrid AI-powered shape parser using Vercel AI SDK + OpenAI.
 
 **Tasks:**
-- [ ] Create predefined shape library (circle, square, heart, hex, star, diamond, triangle, pentagon, octagon, ellipse)
-- [ ] Implement `composables/useAI.ts` with Vercel AI SDK
-- [ ] Integrate OpenAI API for shape generation
-- [ ] Build LLM prompt parser for variations ("spiky circle" → circle with border effects)
-- [ ] Create SVG path generator for custom shapes
-- [ ] Add fallback to circle for unparseable inputs
-- [ ] Create shape preview UI with NuxtUI components
+- [x] Create predefined shape library (circle, square, heart, hex, star, diamond, triangle, pentagon, octagon, ellipse)
+- [x] Implement `composables/useAI.ts` with OpenAI
+- [x] Integrate OpenAI API for shape generation
+- [x] Build LLM prompt parser for variations ("spiky circle" → circle with border effects)
+- [x] Create SVG path generator for custom shapes
+- [x] Add fallback to circle for unparseable inputs
+- [x] Create shape preview UI with NuxtUI components
 
 **Files to Create:**
 - `composables/useAI.ts`
