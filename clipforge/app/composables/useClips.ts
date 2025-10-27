@@ -1,8 +1,11 @@
 import { ref, computed } from 'vue'
 import type { Clip } from '~/types/project'
 
+// Global state to persist clips across components
+const globalClips = ref<Clip[]>([])
+
 export const useClips = () => {
-	const clips = ref<Clip[]>([])
+	const clips = globalClips
 	const selectedClip = ref<Clip | null>(null)
 	const loading = ref(false)
 
@@ -21,13 +24,16 @@ export const useClips = () => {
 
 			if (!user.value) throw new Error('Not authenticated')
 
-			const clipData = {
-				project_id: projectId,
-				src,
-				duration: metadata.duration || 0,
-				start_time: 0,
-				metadata
-			}
+		const clipData = {
+			project_id: projectId,
+			name: metadata.name || 'Untitled Clip',
+			src,
+			duration: metadata.duration || 0,
+			start_time: 0,
+			end_time: metadata.duration || 0,
+			track: 1,
+			metadata
+		}
 
 			const { data, error } = await supabase
 				.from('clips')

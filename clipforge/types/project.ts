@@ -12,6 +12,7 @@ export interface Project {
 export interface Clip {
 	id: string
 	project_id: string
+	name: string
 	src: string
 	start_time: number
 	end_time?: number
