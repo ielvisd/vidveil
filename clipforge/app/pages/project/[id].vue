@@ -194,14 +194,22 @@
 						<div class="track-header">
 							<span>Video Track</span>
 						</div>
-						<div class="track-content">
+						<div 
+							class="track-content"
+							@click="handleTimelineClick"
+							ref="trackContainer"
+						>
+							<!-- Playhead Indicator -->
+							<TimelinePlayheadIndicator :playhead-position="playheadPixels" />
+
+							<!-- Clips -->
 							<div 
 								v-for="clip in clips" 
 								:key="clip.id"
 								class="timeline-clip"
 								:class="{ selected: selectedClip?.id === clip.id }"
 								:style="getClipStyle(clip)"
-								@click="selectClip(clip)"
+								@click.stop="selectClip(clip)"
 							>
 								<span class="clip-label">{{ clip.name }}</span>
 							</div>
@@ -227,10 +235,18 @@ const selectedClip = ref<any>(null)
 const activeClip = ref<any>(null)
 const project = ref<any>(null)
 const videoPlayer = ref<HTMLVideoElement | null>(null)
+const trackContainer = ref<HTMLDivElement | null>(null)
 const isMuted = ref(false)
 
 const canExport = computed(() => clips.value.length > 0)
 const shapes = ['circle', 'square', 'heart', 'star', 'hexagon', 'rounded']
+
+const pixelsPerSecond = computed(() => 50 * zoomLevel.value)
+
+// Playhead position in pixels for the timeline
+const playheadPixels = computed(() => {
+	return currentTime.value * pixelsPerSecond.value
+})
 
 onMounted(async () => {
 	if (projectId) {
@@ -292,12 +308,21 @@ const formatDuration = (seconds: number | undefined): string => {
 const getClipStyle = (clip: any) => {
 	const start = clip.start_time || 0
 	const duration = clip.duration || 10
-	const pixelsPerSecond = 50 * zoomLevel.value
 	
 	return {
-		left: `${start * pixelsPerSecond}px`,
-		width: `${duration * pixelsPerSecond}px`
+		left: `${start * pixelsPerSecond.value}px`,
+		width: `${duration * pixelsPerSecond.value}px`
 	}
+}
+
+const handleTimelineClick = (event: MouseEvent) => {
+	if (!trackContainer.value || !duration.value) return
+	
+	const rect = trackContainer.value.getBoundingClientRect()
+	const x = event.clientX - rect.left
+	const time = x / pixelsPerSecond.value
+	
+	seek(Math.max(0, Math.min(time, duration.value)))
 }
 
 const importMedia = () => {
