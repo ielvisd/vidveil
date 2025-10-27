@@ -16,8 +16,10 @@
 
 		<!-- Main Content -->
 		<div class="recorder-content">
+			<!-- Preview Area -->
 			<div class="recording-area">
-				<div v-if="!stream" class="start-prompt">
+				<!-- Not recording yet -->
+				<div v-if="!isRecording && !recordedScreenBlob" class="start-prompt">
 					<i class="i-heroicons-video-camera text-8xl text-gray-600" />
 					<h2>Ready to Record</h2>
 					<p>Click the record button below to start capturing your screen</p>
@@ -56,7 +58,26 @@
 
 			<!-- Recording Controls -->
 			<div class="controls-area">
-				<RecorderRecordingControls />
+				<div v-if="!isRecording && !recordedScreenBlob" class="control-buttons">
+					<UButton 
+						@click="startRecording"
+						color="red"
+						size="xl"
+						icon="i-heroicons-video-camera"
+					>
+						Start Recording
+					</UButton>
+				</div>
+				<div v-else-if="isRecording" class="control-buttons">
+					<UButton 
+						@click="stopRecording"
+						color="gray"
+						size="xl"
+						icon="i-heroicons-stop"
+					>
+						Stop Recording
+					</UButton>
+				</div>
 			</div>
 
 			<!-- Options -->
@@ -65,31 +86,33 @@
 					<h3>Recording Options</h3>
 					<div class="option-list">
 						<div class="option-item">
-							<label>Source</label>
-							<select class="option-select">
-								<option>Full Screen</option>
-								<option>Window</option>
-								<option>Browser Tab</option>
-							</select>
+							<label class="toggle-label">
+								<input 
+									type="checkbox" 
+									v-model="includeWebcam"
+									:disabled="isRecording"
+									class="toggle-checkbox"
+								/>
+								<span>Include Webcam</span>
+							</label>
+							<p class="option-help">Captures your webcam alongside screen for PiP overlay</p>
 						</div>
 						<div class="option-item">
-							<label>Audio</label>
-							<select class="option-select">
-								<option>System Audio</option>
-								<option>Microphone</option>
-								<option>Both</option>
-								<option>None</option>
-							</select>
+							<label>Audio Source</label>
+							<p class="option-value">System Audio + Microphone</p>
+							<p class="option-help">Automatically captured from screen share</p>
 						</div>
 						<div class="option-item">
-							<label>Quality</label>
-							<select class="option-select">
-								<option>1080p (High)</option>
-								<option>720p (Medium)</option>
-								<option>480p (Low)</option>
-							</select>
+							<label>Format</label>
+							<p class="option-value">WebM (VP9)</p>
+							<p class="option-help">Optimized for editing</p>
 						</div>
 					</div>
+				</div>
+
+				<div v-if="error" class="option-card error-card">
+					<h3>Error</h3>
+					<p class="error-text">{{ error }}</p>
 				</div>
 			</div>
 		</div>
@@ -98,46 +121,119 @@
 
 <script setup lang="ts">
 const router = useRouter()
-const { stream, isRecording, recordedBlob, startRecording, stopRecording } = useScreenCapture()
+const { 
+	screenStream, 
+	webcamStream, 
+	isRecording, 
+	includeWebcam,
+	recordedScreenBlob, 
+	recordedWebcamBlob,
+	error,
+	startRecording: startCapture,
+	stopRecording: stopCapture,
+	reset
+} = useScreenCapture()
+
 const { currentProject } = useProject()
 const { addClip } = useClips()
 
-const previewVideo = ref<HTMLVideoElement | null>(null)
+const screenPreview = ref<HTMLVideoElement | null>(null)
+const webcamPreview = ref<HTMLVideoElement | null>(null)
+const recordingTime = ref('00:00')
+const recordingInterval = ref<NodeJS.Timeout | null>(null)
+const recordingStartTime = ref<number>(0)
 
-const blobUrl = computed(() => {
-	if (!recordedBlob.value) return ''
-	return URL.createObjectURL(recordedBlob.value)
+const screenBlobUrl = computed(() => {
+	if (!recordedScreenBlob.value) return ''
+	return URL.createObjectURL(recordedScreenBlob.value)
 })
 
-const saveRecording = async () => {
-	if (!recordedBlob.value || !currentProject.value) return
+const webcamBlobUrl = computed(() => {
+	if (!recordedWebcamBlob.value) return ''
+	return URL.createObjectURL(recordedWebcamBlob.value)
+})
+
+const startRecording = async () => {
+	await startCapture()
+	
+	if (isRecording.value) {
+		// Start timer
+		recordingStartTime.value = Date.now()
+		recordingInterval.value = setInterval(() => {
+			const elapsed = Math.floor((Date.now() - recordingStartTime.value) / 1000)
+			const mins = Math.floor(elapsed / 60).toString().padStart(2, '0')
+			const secs = (elapsed % 60).toString().padStart(2, '0')
+			recordingTime.value = `${mins}:${secs}`
+		}, 1000)
+	}
+}
+
+const stopRecording = () => {
+	stopCapture()
+	
+	if (recordingInterval.value) {
+		clearInterval(recordingInterval.value)
+		recordingInterval.value = null
+	}
+}
+
+const getVideoDuration = (blob: Blob): Promise<number> => {
+	return new Promise((resolve) => {
+		const video = document.createElement('video')
+		video.src = URL.createObjectURL(blob)
+		video.onloadedmetadata = () => {
+			resolve(video.duration)
+			URL.revokeObjectURL(video.src)
+		}
+	})
+}
+
+const saveRecordings = async () => {
+	if (!recordedScreenBlob.value || !currentProject.value) return
 
 	try {
-		// Convert blob to file
-		const file = new File([recordedBlob.value], `recording-${Date.now()}.webm`, {
-			type: 'video/webm'
+		// Save screen recording
+		const screenFile = new File(
+			[recordedScreenBlob.value], 
+			`screen-${Date.now()}.webm`, 
+			{ type: 'video/webm' }
+		)
+		const screenSrc = URL.createObjectURL(screenFile)
+		const screenDuration = await getVideoDuration(recordedScreenBlob.value)
+
+		await addClip(currentProject.value.id, screenSrc, {
+			name: 'Screen Recording',
+			duration: screenDuration,
+			type: 'screen'
 		})
 
-		// Create object URL for the clip
-		const src = URL.createObjectURL(file)
+		// Save webcam recording if available
+		if (recordedWebcamBlob.value) {
+			const webcamFile = new File(
+				[recordedWebcamBlob.value],
+				`webcam-${Date.now()}.webm`,
+				{ type: 'video/webm' }
+			)
+			const webcamSrc = URL.createObjectURL(webcamFile)
+			const webcamDuration = await getVideoDuration(recordedWebcamBlob.value)
 
-		// Add to project
-		await addClip(currentProject.value.id, src, {
-			name: file.name,
-			duration: 0, // TODO: Get actual duration
-			type: 'screen-recording'
-		})
+			await addClip(currentProject.value.id, webcamSrc, {
+				name: 'Webcam',
+				duration: webcamDuration,
+				type: 'webcam'
+			})
+		}
 
 		// Navigate back to project
 		await navigateTo(`/project/${currentProject.value.id}`)
 	} catch (error) {
-		console.error('Failed to save recording:', error)
+		console.error('Failed to save recordings:', error)
 	}
 }
 
-const discardRecording = () => {
-	// Clear the recorded blob
-	recordedBlob.value = null
+const discardRecordings = () => {
+	reset()
+	recordingTime.value = '00:00'
 }
 
 const goBack = () => {
@@ -150,11 +246,13 @@ const goBack = () => {
 
 // Cleanup on unmount
 onUnmounted(() => {
-	if (stream.value) {
-		stream.value.getTracks().forEach(track => track.stop())
+	stopRecording()
+	
+	if (screenBlobUrl.value) {
+		URL.revokeObjectURL(screenBlobUrl.value)
 	}
-	if (blobUrl.value) {
-		URL.revokeObjectURL(blobUrl.value)
+	if (webcamBlobUrl.value) {
+		URL.revokeObjectURL(webcamBlobUrl.value)
 	}
 })
 </script>
@@ -226,8 +324,88 @@ onUnmounted(() => {
 }
 
 .start-prompt p {
-	margin: 0;
+	margin: 0.5rem 0;
 	color: rgb(156 163 175);
+}
+
+.recording-active {
+	width: 100%;
+	height: 100%;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 2rem;
+}
+
+.preview-grid {
+	display: grid;
+	grid-template-columns: 2fr 1fr;
+	gap: 1rem;
+	width: 100%;
+	height: 100%;
+	padding: 2rem;
+}
+
+.preview-main {
+	position: relative;
+	background-color: #000;
+	border-radius: 0.5rem;
+	overflow: hidden;
+}
+
+.preview-webcam {
+	position: relative;
+	background-color: #000;
+	border-radius: 0.5rem;
+	overflow: hidden;
+}
+
+.preview-label {
+	position: absolute;
+	bottom: 0.5rem;
+	left: 0.5rem;
+	background-color: rgba(0, 0, 0, 0.7);
+	color: white;
+	padding: 0.25rem 0.5rem;
+	border-radius: 0.25rem;
+	font-size: 0.75rem;
+}
+
+.recording-indicator {
+	display: flex;
+	align-items: center;
+	gap: 0.75rem;
+	background-color: rgba(220, 38, 38, 0.2);
+	padding: 0.75rem 1.5rem;
+	border-radius: 0.5rem;
+	border: 1px solid rgb(220, 38, 38);
+	color: white;
+	font-weight: 500;
+}
+
+.recording-dot {
+	width: 12px;
+	height: 12px;
+	background-color: rgb(220, 38, 38);
+	border-radius: 50%;
+	animation: pulse-red 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-red {
+	0%, 100% {
+		opacity: 1;
+		transform: scale(1);
+	}
+	50% {
+		opacity: 0.6;
+		transform: scale(1.1);
+	}
+}
+
+.recording-time {
+	font-family: monospace;
+	font-size: 1.125rem;
 }
 
 .preview-video, .playback-video {
@@ -305,17 +483,40 @@ onUnmounted(() => {
 	color: rgb(156 163 175);
 }
 
-.option-select {
-	padding: 0.5rem;
-	background-color: rgb(55 65 81);
-	border: 1px solid rgb(75 85 99);
-	border-radius: 0.375rem;
-	color: white;
-	font-size: 0.875rem;
+.toggle-label {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	cursor: pointer;
+	color: white !important;
 }
 
-.option-select:focus {
-	outline: none;
-	border-color: rgb(59 130 246);
+.toggle-checkbox {
+	width: 18px;
+	height: 18px;
+	cursor: pointer;
+}
+
+.option-value {
+	font-size: 0.875rem;
+	color: white;
+	margin: 0.5rem 0;
+}
+
+.option-help {
+	font-size: 0.75rem;
+	color: rgb(107 114 128);
+	margin: 0.25rem 0 0 0;
+}
+
+.error-card {
+	background-color: rgba(153, 27, 27, 0.2);
+	border: 1px solid rgb(153, 27, 27);
+}
+
+.error-text {
+	color: rgb(248, 113, 113);
+	font-size: 0.875rem;
+	margin: 0;
 }
 </style>
