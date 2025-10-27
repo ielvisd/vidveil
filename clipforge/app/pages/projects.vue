@@ -45,7 +45,15 @@ const loading = ref(true)
 const error = ref('')
 
 onMounted(async () => {
-	// Wait for auth to finish loading
+	// Wait for auth to initialize
+	const { loading: authLoading } = useAuth()
+	
+	// Wait for auth loading to complete
+	while (authLoading.value) {
+		await new Promise(resolve => setTimeout(resolve, 50))
+	}
+	
+	// Small delay to ensure auth state is set
 	await nextTick()
 	
 	// Check auth status
