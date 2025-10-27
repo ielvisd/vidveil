@@ -62,11 +62,17 @@ const handleAddToProject = async () => {
 }
 
 .header {
-	@apply flex justify-between items-center mb-6;
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	margin-bottom: 1.5rem;
 }
 
 .stats {
-	@apply grid grid-cols-2 gap-4 mb-6;
+	display: grid;
+	grid-template-columns: repeat(2, 1fr);
+	gap: 1rem;
+	margin-bottom: 1.5rem;
 }
 </style>
 
