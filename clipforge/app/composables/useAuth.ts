@@ -29,6 +29,8 @@ export const useAuth = () => {
 			})
 			if (error) throw error
 			user.value = data.user
+			// Refresh session to ensure persistence
+			await checkSession()
 			return { user: data.user, error: null }
 		} catch (error: any) {
 			return { user: null, error: error.message }
