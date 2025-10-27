@@ -1,51 +1,57 @@
--- ClipForge Supabase Schema
--- Tables for projects, clips, and PiP configurations
+-- ClipForge Supabase Database Schema
+-- Run this in your Supabase SQL editor
+
+-- Enable UUID extension
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- Projects table
-CREATE TABLE projects (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+CREATE TABLE IF NOT EXISTS projects (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
+  description TEXT,
+  thumbnail_url TEXT,
   settings JSONB DEFAULT '{}'::jsonb,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 -- Clips table
-CREATE TABLE clips (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  project_id UUID REFERENCES projects(id) ON DELETE CASCADE NOT NULL,
+CREATE TABLE IF NOT EXISTS clips (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
   src TEXT NOT NULL,
-  start_time REAL DEFAULT 0,
-  end_time REAL,
+  start_time NUMERIC DEFAULT 0,
+  end_time NUMERIC,
+  duration NUMERIC,
   track INTEGER DEFAULT 0,
   pip_config JSONB DEFAULT '{}'::jsonb,
+  metadata JSONB DEFAULT '{}'::jsonb,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- PiP configs table
-CREATE TABLE pip_configs (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  clip_id UUID REFERENCES clips(id) ON DELETE CASCADE,
-  shape_type TEXT NOT NULL,
+-- PiP configurations table
+CREATE TABLE IF NOT EXISTS pip_configs (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  clip_id UUID NOT NULL REFERENCES clips(id) ON DELETE CASCADE,
+  shape_type TEXT NOT NULL DEFAULT 'circle',
   shape_path TEXT,
+  shape_params JSONB DEFAULT '{}'::jsonb,
   position JSONB DEFAULT '{"x": 0, "y": 0}',
   animations JSONB DEFAULT '[]'::jsonb,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Indexes for performance
-CREATE INDEX idx_projects_user_id ON projects(user_id);
-CREATE INDEX idx_clips_project_id ON clips(project_id);
-CREATE INDEX idx_pip_configs_clip_id ON pip_configs(clip_id);
+-- Row Level Security (RLS) Policies
 
--- Row Level Security (RLS)
+-- Enable RLS
 ALTER TABLE projects ENABLE ROW LEVEL SECURITY;
 ALTER TABLE clips ENABLE ROW LEVEL SECURITY;
 ALTER TABLE pip_configs ENABLE ROW LEVEL SECURITY;
 
--- RLS Policies for projects
+-- Projects policies
 CREATE POLICY "Users can view their own projects"
   ON projects FOR SELECT
   USING (auth.uid() = user_id);
@@ -56,14 +62,13 @@ CREATE POLICY "Users can create their own projects"
 
 CREATE POLICY "Users can update their own projects"
   ON projects FOR UPDATE
-  USING (auth.uid() = user_id)
-  WITH CHECK (auth.uid() = user_id);
+  USING (auth.uid() = user_id);
 
 CREATE POLICY "Users can delete their own projects"
   ON projects FOR DELETE
   USING (auth.uid() = user_id);
 
--- RLS Policies for clips
+-- Clips policies
 CREATE POLICY "Users can view clips in their projects"
   ON clips FOR SELECT
   USING (
@@ -104,7 +109,7 @@ CREATE POLICY "Users can delete clips in their projects"
     )
   );
 
--- RLS Policies for pip_configs
+-- PiP configs policies
 CREATE POLICY "Users can view pip configs in their projects"
   ON pip_configs FOR SELECT
   USING (
@@ -149,3 +154,31 @@ CREATE POLICY "Users can delete pip configs in their projects"
     )
   );
 
+-- Indexes for performance
+CREATE INDEX IF NOT EXISTS projects_user_id_idx ON projects(user_id);
+CREATE INDEX IF NOT EXISTS clips_project_id_idx ON clips(project_id);
+CREATE INDEX IF NOT EXISTS pip_configs_clip_id_idx ON pip_configs(clip_id);
+
+-- Update timestamp trigger
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER update_projects_updated_at
+  BEFORE UPDATE ON projects
+  FOR EACH ROW
+  EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_clips_updated_at
+  BEFORE UPDATE ON clips
+  FOR EACH ROW
+  EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_pip_configs_updated_at
+  BEFORE UPDATE ON pip_configs
+  FOR EACH ROW
+  EXECUTE FUNCTION update_updated_at_column();

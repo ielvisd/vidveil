@@ -84,5 +84,12 @@ export default defineNuxtConfig({
 	experimental: {
 		typedPages: true
 	},
-	compatibilityDate: "2025-09-01"
+	compatibilityDate: "2025-09-01",
+	runtimeConfig: {
+		public: {
+			supabaseUrl: process.env.PUBLIC_SUPABASE_URL,
+			supabaseKey: process.env.PUBLIC_SUPABASE_KEY,
+			openaiApiKey: process.env.OPENAI_API_KEY
+		}
+	}
 });
