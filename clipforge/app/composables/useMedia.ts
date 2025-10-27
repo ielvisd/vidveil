@@ -13,9 +13,13 @@ export interface MediaFile {
 	metadata?: Record<string, any>
 }
 
+// Global state to persist across navigation
+const globalMediaFiles = ref<MediaFile[]>([])
+const globalSelectedMedia = ref<MediaFile | null>(null)
+
 export const useMedia = () => {
-	const mediaFiles = ref<MediaFile[]>([])
-	const selectedMedia = ref<MediaFile | null>(null)
+	const mediaFiles = globalMediaFiles
+	const selectedMedia = globalSelectedMedia
 	const loading = ref(false)
 	const dragging = ref(false)
 
