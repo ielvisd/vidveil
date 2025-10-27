@@ -8,16 +8,16 @@
 			<img v-if="file.thumbnail" :src="file.thumbnail" :alt="file.name" />
 			<div v-else class="placeholder">
 				<svg class="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-			</svg>
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+				</svg>
 			</div>
 
 			<div class="overlay">
 				<button
 					@click.stop="$emit('remove')"
-					class="inline-flex items-center px-2 py-1 text-xs font-medium text-white bg-red-600 rounded hover:bg-red-700"
+					class="delete-btn"
 				>
-					<UIcon name="i-heroicons-trash" class="w-4 h-4" />
+					🗑️
 				</button>
 			</div>
 
@@ -65,43 +65,94 @@ const formatFileSize = (bytes: number): string => {
 
 <style scoped>
 .media-thumbnail {
-	cursor-pointer rounded-lg overflow-hidden bg-gray-100 hover:bg-gray-200 transition-all;
+	cursor: pointer;
+	border-radius: 0.5rem;
+	overflow: hidden;
+	background-color: rgb(243 244 246);
+	transition: all 0.2s;
+}
+
+.media-thumbnail:hover {
+	background-color: rgb(229 231 235);
 }
 
 .media-thumbnail.selected {
-	ring-2 ring-blue-500;
+	box-shadow: 0 0 0 2px rgb(59 130 246);
 }
 
 .thumbnail-container {
-	relative aspect-video bg-gray-900;
+	position: relative;
+	aspect-ratio: 16 / 9;
+	background-color: rgb(17 24 39);
 }
 
 .thumbnail-container img {
-	w-full h-full object-cover;
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
 }
 
 .placeholder {
-	w-full h-full flex items-center justify-center;
+	width: 100%;
+	height: 100%;
+	display: flex;
+	align-items: center;
+	justify-content: center;
 }
 
 .overlay {
-	absolute inset-0 bg-black bg-opacity-0 hover:bg-opacity-60 transition-all flex items-center justify-center;
+	position: absolute;
+	inset: 0;
+	background-color: rgba(0, 0, 0, 0);
+	transition: background-color 0.2s;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.media-thumbnail:hover .overlay {
+	background-color: rgba(0, 0, 0, 0.6);
+}
+
+.delete-btn {
+	padding: 0.25rem 0.5rem;
+	background-color: rgb(220 38 38);
+	color: white;
+	border-radius: 0.25rem;
+	border: none;
+	cursor: pointer;
+	font-size: 0.875rem;
+}
+
+.delete-btn:hover {
+	background-color: rgb(185 28 28);
 }
 
 .duration {
-	absolute bottom-2 right-2 bg-black bg-opacity-75 text-white text-xs px-2 py-1 border-radius: 0.25rem;
+	position: absolute;
+	bottom: 0.5rem;
+	right: 0.5rem;
+	background-color: rgba(0, 0, 0, 0.75);
+	color: white;
+	font-size: 0.75rem;
+	padding: 0.25rem 0.5rem;
+	border-radius: 0.25rem;
 }
 
 .info {
-	p-3;
+	padding: 0.75rem;
 }
 
 .filename {
-	text-sm font-medium truncate;
+	font-size: 0.875rem;
+	font-weight: 500;
+	text-overflow: ellipsis;
+	overflow: hidden;
+	white-space: nowrap;
 }
 
 .filesize {
-	text-xs text-gray-500;
+	font-size: 0.75rem;
+	color: rgb(107 114 128);
 }
 </style>
-
