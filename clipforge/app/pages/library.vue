@@ -19,7 +19,7 @@
 				</UCard>
 			</div>
 
-			<MediaLibrary />
+			<LibraryMediaLibrary />
 		</div>
 	</UContainer>
 </template>
