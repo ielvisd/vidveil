@@ -49,9 +49,12 @@ const formatFileSize = (bytes: number): string => {
 const handleAddToProject = async () => {
 	if (!selectedMedia.value || !currentProject.value) return
 
-	// Add clip to project logic would go here
-	// For now just navigate back
-	await navigateTo('/editor')
+	// Add clip to project
+	const { addClip } = useClips()
+	if (currentProject.value) {
+		await addClip(currentProject.value.id, selectedMedia.value.src, selectedMedia.value.metadata)
+		await navigateTo('/editor')
+	}
 }
 </script>
 
