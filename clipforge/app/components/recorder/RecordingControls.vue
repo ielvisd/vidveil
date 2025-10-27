@@ -73,23 +73,42 @@ onUnmounted(() => {
 
 <style scoped>
 .recording-controls {
-	p-6;
+	padding: 1.5rem;
 }
 
 .controls-center {
-	flex justify-center;
+	display: flex;
+	justify-content: center;
 }
 
 .recording-indicator {
-	mt-4 flex items-center gap-3 justify-center;
+	margin-top: 1rem;
+	display: flex;
+	align-items: center;
+	gap: 0.75rem;
+	justify-content: center;
 }
 
 .pulse-dot {
-	w-3 h-3 bg-red-500 rounded-full animate-pulse;
+	width: 0.75rem;
+	height: 0.75rem;
+	background-color: rgb(239 68 68);
+	border-radius: 9999px;
+	animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulse {
+	0%, 100% {
+		opacity: 1;
+	}
+	50% {
+		opacity: 0.5;
+	}
 }
 
 .time {
-	font-mono text-lg;
+	font-family: ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono", Menlo, monospace;
+	font-size: 1.125rem;
 }
 </style>
 

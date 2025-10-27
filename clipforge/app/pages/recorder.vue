@@ -3,10 +3,10 @@
 		<div class="recorder-page">
 			<h1 class="text-3xl font-bold mb-6">Screen Recorder</h1>
 
-			<RecordingControls />
+			<RecorderRecordingControls />
 
 			<div v-if="stream" class="recording-preview mt-8">
-				<VideoPreview :src="blobUrl" />
+				<video :src="blobUrl" controls class="preview-video" />
 			</div>
 		</div>
 	</UContainer>
@@ -38,6 +38,11 @@ watch(() => stream.value, () => {
 	max-width: 56rem;
 	margin: 0 auto;
 	margin-top: 2rem;
+}
+
+.preview-video {
+	width: 100%;
+	border-radius: 0.5rem;
 }
 </style>
 
