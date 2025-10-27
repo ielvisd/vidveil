@@ -101,6 +101,12 @@
 							<p>{{ formatDuration(selectedClip.duration) }}</p>
 						</div>
 						<div class="property">
+							<label>Storage</label>
+							<p class="storage-badge" :class="selectedClip.metadata?.storageType || 'cloud'">
+								{{ selectedClip.metadata?.storageType === 'local' ? '📦 Local' : '☁️ Cloud' }}
+							</p>
+						</div>
+						<div class="property">
 							<label>Track</label>
 							<p>Track {{ selectedClip.track || 1 }}</p>
 						</div>

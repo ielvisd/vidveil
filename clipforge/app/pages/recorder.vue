@@ -242,7 +242,8 @@ const saveRecordings = async () => {
 		await addClip(currentProject.value.id, screenSrc, {
 			name: 'Screen Recording',
 			duration: screenDuration,
-			type: 'screen'
+			type: 'screen',
+			fileSize: recordedScreenBlob.value.size
 		})
 
 		// Save webcam recording if available
@@ -258,7 +259,8 @@ const saveRecordings = async () => {
 			await addClip(currentProject.value.id, webcamSrc, {
 				name: 'Webcam',
 				duration: webcamDuration,
-				type: 'webcam'
+				type: 'webcam',
+				fileSize: recordedWebcamBlob.value.size
 			})
 		}
 

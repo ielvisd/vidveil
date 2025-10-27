@@ -1,8 +1,12 @@
 import { ref, computed } from 'vue'
 import type { Clip } from '~/types/project'
+import { saveVideoToIndexedDB, getVideoFromIndexedDB, deleteVideoFromIndexedDB, createBlobURL } from '~/utils/indexedDB'
 
 // Global state to persist clips across components
 const globalClips = ref<Clip[]>([])
+
+// Storage strategy constants
+const MAX_SUPABASE_SIZE = 50 * 1024 * 1024 // 50MB in bytes
 
 export const useClips = () => {
 	const clips = globalClips
@@ -24,32 +28,57 @@ export const useClips = () => {
 
 			if (!user.value) throw new Error('Not authenticated')
 
-			// Upload blob to Supabase Storage if it's a blob URL
 			let fileUrl = src
+			let storageType: 'local' | 'cloud' = 'cloud'
+			let clipId = crypto.randomUUID()
+
+			// Handle blob URLs
 			if (src.startsWith('blob:')) {
 				const blob = await fetch(src).then(r => r.blob())
-				const fileName = `${projectId}/${Date.now()}-${metadata.name || 'clip'}.webm`
-				
-				const { data: uploadData, error: uploadError } = await supabase
-					.storage
-					.from('clips')
-					.upload(fileName, blob, {
-						contentType: blob.type,
-						upsert: false
-					})
+				const fileSize = blob.size
 
-				if (uploadError) throw uploadError
+				console.log(`File size: ${(fileSize / 1024 / 1024).toFixed(2)}MB`)
 
-				// Get public URL
-				const { data: urlData } = supabase
-					.storage
-					.from('clips')
-					.getPublicUrl(fileName)
+				// Decide storage strategy based on file size
+				if (fileSize > MAX_SUPABASE_SIZE) {
+					// Store locally in IndexedDB
+					console.log('📦 Storing in IndexedDB (file too large for Supabase)')
+					await saveVideoToIndexedDB(clipId, blob, metadata)
+					fileUrl = `indexeddb://${clipId}`
+					storageType = 'local'
+				} else {
+					// Upload to Supabase Storage
+					console.log('☁️ Uploading to Supabase Storage')
+					const fileName = `${projectId}/${Date.now()}-${metadata.name || 'clip'}.webm`
+					
+					const { data: uploadData, error: uploadError } = await supabase
+						.storage
+						.from('clips')
+						.upload(fileName, blob, {
+							contentType: blob.type,
+							upsert: false
+						})
 
-				fileUrl = urlData.publicUrl
+					if (uploadError) {
+						// Fallback to IndexedDB if upload fails
+						console.warn('Supabase upload failed, falling back to IndexedDB:', uploadError)
+						await saveVideoToIndexedDB(clipId, blob, metadata)
+						fileUrl = `indexeddb://${clipId}`
+						storageType = 'local'
+					} else {
+						// Get public URL
+						const { data: urlData } = supabase
+							.storage
+							.from('clips')
+							.getPublicUrl(fileName)
+
+						fileUrl = urlData.publicUrl
+					}
+				}
 			}
 
 			const clipData = {
+				id: clipId,
 				project_id: projectId,
 				name: metadata.name || 'Untitled Clip',
 				src: fileUrl,
@@ -57,7 +86,11 @@ export const useClips = () => {
 				start_time: 0,
 				end_time: metadata.duration || 0,
 				track: 1,
-				metadata
+				metadata: {
+					...metadata,
+					storageType,
+					fileSize: metadata.fileSize || 0
+				}
 			}
 
 			const { data, error } = await supabase
@@ -109,6 +142,12 @@ export const useClips = () => {
 		loading.value = true
 		try {
 			const supabase = useSupabaseClient()
+
+			// Check if clip is stored in IndexedDB
+			const clip = clips.value.find(c => c.id === clipId)
+			if (clip?.metadata?.storageType === 'local') {
+				await deleteVideoFromIndexedDB(clipId)
+			}
 
 			const { error } = await supabase
 				.from('clips')
@@ -166,9 +205,26 @@ export const useClips = () => {
 
 			if (error) throw error
 
-			clips.value = data || []
+			// Convert IndexedDB references to blob URLs
+			const clipsWithUrls = await Promise.all(
+				(data || []).map(async (clip) => {
+					if (clip.src.startsWith('indexeddb://')) {
+						const id = clip.src.replace('indexeddb://', '')
+						const blob = await getVideoFromIndexedDB(id)
+						if (blob) {
+							return {
+								...clip,
+								src: createBlobURL(blob)
+							}
+						}
+					}
+					return clip
+				})
+			)
 
-			return { clips: data, error: null }
+			clips.value = clipsWithUrls
+
+			return { clips: clipsWithUrls, error: null }
 		} catch (error: any) {
 			return { clips: [], error: error.message }
 		} finally {
