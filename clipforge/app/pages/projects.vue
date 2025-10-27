@@ -7,6 +7,10 @@
 			</UButton>
 		</div>
 
+		<div v-if="error" class="error-state">
+			<UAlert color="red" :title="error" />
+		</div>
+
 		<div v-if="loading" class="loading">
 			<p>Loading projects...</p>
 		</div>
@@ -36,10 +40,21 @@
 
 <script setup lang="ts">
 const { projects, fetchProjects, createProject } = useProject()
+const { isAuthenticated, user } = useAuth()
 const loading = ref(true)
+const error = ref('')
 
 onMounted(async () => {
-	await fetchProjects()
+	if (!isAuthenticated.value) {
+		error.value = 'Please log in to view your projects'
+		loading.value = false
+		return
+	}
+	
+	const result = await fetchProjects()
+	if (result.error) {
+		error.value = result.error
+	}
 	loading.value = false
 })
 
@@ -48,6 +63,11 @@ const createNewProject = async () => {
 	if (!name) return
 
 	const result = await createProject({ name })
+	if (result.error) {
+		alert('Error creating project: ' + result.error)
+		return
+	}
+	
 	if (result.project) {
 		await navigateTo(`/project/${result.project.id}`)
 	}
