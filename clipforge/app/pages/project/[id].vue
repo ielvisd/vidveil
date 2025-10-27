@@ -330,7 +330,7 @@
 		</div>
 
 		<!-- Export Dialog -->
-		<ExportExportDialog
+		<ExportDialog
 			v-if="showExportDialog"
 			:clips="clips"
 			:project-name="project?.name"
