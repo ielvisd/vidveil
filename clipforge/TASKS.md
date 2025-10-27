@@ -310,11 +310,11 @@ graph TB
 **Description:** Create PiP controls with animation support.
 
 **Tasks:**
-- [ ] Create PiP resize handles on timeline
-- [ ] Implement position keyframing
-- [ ] Add shape editing from timeline
-- [ ] Create shape animation controls (pulse, rotate, scale)
-- Link to audio peaks for reactive animations
+- [x] Create PiP resize handles on timeline
+- [x] Implement position keyframing
+- [x] Add shape editing from timeline
+- [x] Create shape animation controls (pulse, rotate, scale)
+- [x] Link to audio peaks for reactive animations
 
 **Files to Create:**
 - `components/timeline/PipControls.vue`
