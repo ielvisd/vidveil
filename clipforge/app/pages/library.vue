@@ -56,6 +56,13 @@ const canAddToProject = computed(() => {
 	return selectedMedia.value !== null && currentProject.value !== null
 })
 
+// Debug logging
+watchEffect(() => {
+	console.log('Library - currentProject:', currentProject.value?.id, currentProject.value?.name)
+	console.log('Library - selectedMedia:', selectedMedia.value?.name)
+	console.log('Library - canAddToProject:', canAddToProject.value)
+})
+
 const formatFileSize = (bytes: number): string => {
 	if (bytes === 0) return '0 B'
 	

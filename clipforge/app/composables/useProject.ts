@@ -1,9 +1,13 @@
 import { ref, computed } from 'vue'
 import type { Project, ProjectWithClips } from '~/types/project'
 
+// Global state to persist current project across navigation
+const globalProjects = ref<Project[]>([])
+const globalCurrentProject = ref<ProjectWithClips | null>(null)
+
 export const useProject = () => {
-	const projects = ref<Project[]>([])
-	const currentProject = ref<ProjectWithClips | null>(null)
+	const projects = globalProjects
+	const currentProject = globalCurrentProject
 	const loading = ref(false)
 
 	const hasProjects = computed(() => projects.value.length > 0)
