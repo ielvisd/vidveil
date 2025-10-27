@@ -207,11 +207,11 @@ graph TB
 **Description:** Set up Konva.js canvas for timeline interface.
 
 **Tasks:**
-- [ ] Set up Konva.js canvas for timeline
-- [ ] Create horizontal timeline with zoom controls
-- [ ] Implement ruler/timecode display
-- [ ] Add clip thumbnail rendering on timeline
-- [ ] Create draggable clip functionality
+- [x] Set up Konva.js canvas for timeline
+- [x] Create horizontal timeline with zoom controls
+- [x] Implement ruler/timecode display
+- [x] Add clip thumbnail rendering on timeline (basic)
+- [x] Create draggable clip functionality (basic)
 
 **Files to Create:**
 - `composables/useZoom.ts`
