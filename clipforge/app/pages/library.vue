@@ -1,46 +1,66 @@
 <template>
-	<UContainer>
-		<div class="library-page">
-			<div class="header">
-				<h1 class="text-3xl font-bold">Media Library</h1>
-				<UButton @click="handleAddToProject" :disabled="!canAddToProject" icon="i-heroicons-plus">
-					Add to Project
-				</UButton>
-			</div>
+	<div class="library-page">
+		<!-- Top Bar -->
+		<div class="top-bar">
+			<UButton 
+				@click="goBack" 
+				icon="i-heroicons-arrow-left" 
+				variant="ghost"
+				size="sm"
+			>
+				Back
+			</UButton>
+			<h1>Media Library</h1>
+			<UButton 
+				@click="handleAddToProject" 
+				:disabled="!canAddToProject"
+				color="primary"
+				size="sm"
+			>
+				Add to Project
+			</UButton>
+		</div>
 
-			<div class="stats">
-				<UCard>
-					<p class="text-sm text-gray-500">Total Files</p>
-					<p class="text-2xl font-bold">{{ mediaCount }}</p>
-				</UCard>
-				<UCard>
-					<p class="text-sm text-gray-500">Total Size</p>
-					<p class="text-2xl font-bold">{{ formatFileSize(totalSize) }}</p>
-				</UCard>
+		<!-- Stats -->
+		<div class="stats-container">
+			<div class="stat-card">
+				<div class="stat-label">Total Files</div>
+				<div class="stat-value">{{ mediaCount }}</div>
 			</div>
+			<div class="stat-card">
+				<div class="stat-label">Total Size</div>
+				<div class="stat-value">{{ formatFileSize(totalSize) }}</div>
+			</div>
+			<div class="stat-card">
+				<div class="stat-label">Selected</div>
+				<div class="stat-value">{{ selectedMedia ? '1' : '0' }}</div>
+			</div>
+		</div>
 
+		<!-- Media Library Component -->
+		<div class="library-content">
 			<LibraryMediaLibrary />
 		</div>
-	</UContainer>
+	</div>
 </template>
 
 <script setup lang="ts">
-definePageMeta({
-	requiresAuth: true
-})
+const route = useRoute()
+const router = useRouter()
 
-const { mediaFiles, selectedMedia, mediaCount, totalSize, clearMedia } = useMedia()
-const { currentProject, updateProject } = useProject()
+const { mediaFiles, selectedMedia, mediaCount, totalSize } = useMedia()
+const { currentProject } = useProject()
+const { addClip } = useClips()
 
 const canAddToProject = computed(() => {
 	return selectedMedia.value !== null && currentProject.value !== null
 })
 
 const formatFileSize = (bytes: number): string => {
-	if (bytes === 0) return '0 Bytes'
+	if (bytes === 0) return '0 B'
 	
 	const k = 1024
-	const sizes = ['Bytes', 'KB', 'MB', 'GB']
+	const sizes = ['B', 'KB', 'MB', 'GB']
 	const i = Math.floor(Math.log(bytes) / Math.log(k))
 	
 	return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i]
@@ -49,33 +69,85 @@ const formatFileSize = (bytes: number): string => {
 const handleAddToProject = async () => {
 	if (!selectedMedia.value || !currentProject.value) return
 
-	// Add clip to project
-	const { addClip } = useClips()
+	try {
+		await addClip(currentProject.value.id, selectedMedia.value.src, {
+			name: selectedMedia.value.name,
+			duration: selectedMedia.value.duration || 0,
+			...selectedMedia.value.metadata
+		})
+		
+		// Navigate back to the project editor
+		await navigateTo(`/project/${currentProject.value.id}`)
+	} catch (error) {
+		console.error('Failed to add clip:', error)
+	}
+}
+
+const goBack = () => {
 	if (currentProject.value) {
-		await addClip(currentProject.value.id, selectedMedia.value.src, selectedMedia.value.metadata)
-		await navigateTo('/editor')
+		router.push(`/project/${currentProject.value.id}`)
+	} else {
+		router.push('/projects')
 	}
 }
 </script>
 
 <style scoped>
 .library-page {
-	padding-top: 2rem;
-	padding-bottom: 2rem;
-}
-
-.header {
 	display: flex;
-	justify-content: space-between;
-	align-items: center;
-	margin-bottom: 1.5rem;
+	flex-direction: column;
+	height: 100vh;
+	background-color: rgb(17 24 39);
+	color: white;
+	overflow: hidden;
 }
 
-.stats {
-	display: grid;
-	grid-template-columns: repeat(2, 1fr);
+.top-bar {
+	display: flex;
+	align-items: center;
 	gap: 1rem;
-	margin-bottom: 1.5rem;
+	padding: 0.75rem 1.5rem;
+	background-color: rgb(31 41 55);
+	border-bottom: 1px solid rgb(55 65 81);
+}
+
+.top-bar h1 {
+	flex: 1;
+	font-size: 1.125rem;
+	font-weight: 600;
+	margin: 0;
+}
+
+.stats-container {
+	display: grid;
+	grid-template-columns: repeat(3, 1fr);
+	gap: 1rem;
+	padding: 1.5rem;
+	background-color: rgb(17 24 39);
+}
+
+.stat-card {
+	background-color: rgb(31 41 55);
+	border-radius: 0.5rem;
+	padding: 1.25rem;
+	border: 1px solid rgb(55 65 81);
+}
+
+.stat-label {
+	font-size: 0.875rem;
+	color: rgb(156 163 175);
+	margin-bottom: 0.5rem;
+}
+
+.stat-value {
+	font-size: 1.875rem;
+	font-weight: 700;
+	color: white;
+}
+
+.library-content {
+	flex: 1;
+	overflow-y: auto;
+	padding: 0 1.5rem 1.5rem 1.5rem;
 }
 </style>
-

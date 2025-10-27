@@ -1,14 +1,16 @@
 import { ref, computed } from 'vue'
 import type { Ref } from 'vue'
-import Plyr from 'plyr'
-import 'plyr/dist/plyr.css'
+
+// Global playhead state shared between player and timeline
+const globalPlayheadPosition = ref(0)
+const globalIsPlaying = ref(false)
 
 export const usePlayer = () => {
-	const player = ref<Plyr | null>(null)
 	const videoElement = ref<HTMLVideoElement | null>(null)
-	const currentTime = ref(0)
+	const currentTime = globalPlayheadPosition
+	const playheadPosition = globalPlayheadPosition
 	const duration = ref(0)
-	const isPlaying = ref(false)
+	const isPlaying = globalIsPlaying
 	const isLoaded = ref(false)
 
 	const progress = computed(() => {
@@ -24,24 +26,6 @@ export const usePlayer = () => {
 
 	const initializePlayer = (element: HTMLVideoElement) => {
 		videoElement.value = element
-		
-		player.value = new Plyr(element, {
-			controls: [
-				'play-large',
-				'play',
-				'progress',
-				'current-time',
-				'duration',
-				'mute',
-				'volume',
-				'settings',
-				'pip',
-				'airplay',
-				'fullscreen'
-			],
-			keyboard: { global: true },
-			tooltips: { controls: true, seek: true }
-		})
 
 		// Listen to events
 		element.addEventListener('loadedmetadata', () => {
@@ -50,22 +34,24 @@ export const usePlayer = () => {
 		})
 
 		element.addEventListener('timeupdate', () => {
-			currentTime.value = element.currentTime
+			if (!element.paused) {
+				globalPlayheadPosition.value = element.currentTime
+			}
 		})
 
 		element.addEventListener('play', () => {
-			isPlaying.value = true
+			globalIsPlaying.value = true
 		})
 
 		element.addEventListener('pause', () => {
-			isPlaying.value = false
+			globalIsPlaying.value = false
 		})
 
 		element.addEventListener('ended', () => {
-			isPlaying.value = false
+			globalIsPlaying.value = false
 		})
 
-		return player.value
+		return element
 	}
 
 	const play = () => {
@@ -85,6 +71,14 @@ export const usePlayer = () => {
 	}
 
 	const seek = (time: number) => {
+		if (videoElement.value) {
+			videoElement.value.currentTime = time
+			globalPlayheadPosition.value = time
+		}
+	}
+
+	const setPlayheadPosition = (time: number) => {
+		globalPlayheadPosition.value = time
 		if (videoElement.value) {
 			videoElement.value.currentTime = time
 		}
@@ -127,18 +121,14 @@ export const usePlayer = () => {
 	}
 
 	const destroy = () => {
-		if (player.value) {
-			player.value.destroy()
-			player.value = null
-		}
 		videoElement.value = null
 		isLoaded.value = false
 	}
 
 	return {
-		player,
 		videoElement,
 		currentTime,
+		playheadPosition,
 		duration,
 		isPlaying,
 		isLoaded,
@@ -149,6 +139,7 @@ export const usePlayer = () => {
 		pause,
 		togglePlay,
 		seek,
+		setPlayheadPosition,
 		seekBy,
 		goToStart,
 		goToEnd,
