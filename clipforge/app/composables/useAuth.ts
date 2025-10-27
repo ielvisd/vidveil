@@ -1,23 +1,25 @@
 import { ref, computed } from 'vue'
 import type { User } from '@supabase/supabase-js'
 
+// Global singleton state
+const globalUser = ref<User | null>(null)
+const globalLoading = ref(true)
+
 export const useAuth = () => {
 	const client = useSupabaseClient()
-	const user = ref<User | null>(null)
-	const loading = ref(true)
 
-	const isAuthenticated = computed(() => !!user.value)
-	const userId = computed(() => user.value?.id)
+	const isAuthenticated = computed(() => !!globalUser.value)
+	const userId = computed(() => globalUser.value?.id)
 
 	const checkSession = async () => {
 		try {
 			const { data: { session } } = await client.auth.getSession()
-			user.value = session?.user ?? null
+			globalUser.value = session?.user ?? null
 		} catch (error) {
 			console.error('Error checking session:', error)
-			user.value = null
+			globalUser.value = null
 		} finally {
-			loading.value = false
+			globalLoading.value = false
 		}
 	}
 
@@ -28,7 +30,7 @@ export const useAuth = () => {
 				password
 			})
 			if (error) throw error
-			user.value = data.user
+			globalUser.value = data.user
 			// Refresh session to ensure persistence
 			await checkSession()
 			return { user: data.user, error: null }
@@ -44,7 +46,7 @@ export const useAuth = () => {
 				password
 			})
 			if (error) throw error
-			user.value = data.user
+			globalUser.value = data.user
 			return { user: data.user, error: null }
 		} catch (error: any) {
 			return { user: null, error: error.message }
@@ -54,7 +56,7 @@ export const useAuth = () => {
 	const signOut = async () => {
 		try {
 			await client.auth.signOut()
-			user.value = null
+			globalUser.value = null
 			await navigateTo('/')
 		} catch (error: any) {
 			console.error('Error signing out:', error)
@@ -77,18 +79,18 @@ export const useAuth = () => {
 	}
 
 	// Initialize on mount
-	if (process.client) {
+	if (process.client && globalLoading.value) {
 		checkSession()
 
 		// Listen for auth changes
 		client.auth.onAuthStateChange((_event, session) => {
-			user.value = session?.user ?? null
+			globalUser.value = session?.user ?? null
 		})
 	}
 
 	return {
-		user,
-		loading,
+		user: globalUser,
+		loading: globalLoading,
 		isAuthenticated,
 		userId,
 		checkSession,
