@@ -142,29 +142,59 @@
 							:icon="isPlaying ? 'i-heroicons-pause' : 'i-heroicons-play'"
 							size="sm"
 							variant="ghost"
+							title="Play/Pause (Space)"
 						/>
 						<UButton 
 							@click="seekBackward"
 							icon="i-heroicons-backward"
 							size="sm"
 							variant="ghost"
+							title="Rewind 5s (←)"
 						/>
 						<UButton 
 							@click="seekForward"
 							icon="i-heroicons-forward"
 							size="sm"
 							variant="ghost"
+							title="Forward 5s (→)"
+						/>
+						<UButton 
+							@click="goToStart"
+							icon="i-heroicons-chevron-double-left"
+							size="sm"
+							variant="ghost"
+							title="Go to start"
 						/>
 					</div>
 					<div class="time-display">
-						{{ formatTime(currentTime) }} / {{ formatTime(duration) }}
+						<span class="current-time">{{ formatTime(currentTime) }}</span>
+						<span class="separator">/</span>
+						<span class="total-time">{{ formatTime(duration) }}</span>
 					</div>
 					<div class="controls-right">
+						<div class="volume-control">
+							<UButton 
+								@click="toggleMute"
+								:icon="isMuted ? 'i-heroicons-speaker-x-mark' : 'i-heroicons-speaker-wave'"
+								size="sm"
+								variant="ghost"
+								title="Mute (M)"
+							/>
+							<input 
+								type="range" 
+								v-model="volume"
+								@input="updateVolume"
+								min="0" 
+								max="100" 
+								class="volume-slider"
+							/>
+						</div>
 						<UButton 
-							@click="toggleMute"
-							:icon="isMuted ? 'i-heroicons-speaker-x-mark' : 'i-heroicons-speaker-wave'"
+							@click="toggleFullscreen"
+							icon="i-heroicons-arrows-pointing-out"
 							size="sm"
 							variant="ghost"
+							title="Fullscreen (F)"
 						/>
 					</div>
 				</div>
@@ -243,6 +273,7 @@ const project = ref<any>(null)
 const videoPlayer = ref<HTMLVideoElement | null>(null)
 const trackContainer = ref<HTMLDivElement | null>(null)
 const isMuted = ref(false)
+const volume = ref(100)
 
 const canExport = computed(() => clips.value.length > 0)
 const shapes = ['circle', 'square', 'heart', 'star', 'hexagon', 'rounded']
@@ -254,18 +285,6 @@ const playheadPixels = computed(() => {
 	return currentTime.value * pixelsPerSecond.value
 })
 
-onMounted(async () => {
-	if (projectId) {
-		const result = await selectProject(projectId)
-		project.value = result.project
-		await fetchClips(projectId)
-		
-		// Auto-select first clip if available
-		if (clips.value.length > 0) {
-			selectClip(clips.value[0])
-		}
-	}
-})
 
 const handleVideoLoaded = () => {
 	if (videoPlayer.value) {
@@ -303,6 +322,86 @@ const toggleMute = () => {
 		isMuted.value = videoPlayer.value.muted
 	}
 }
+
+const updateVolume = () => {
+	if (videoPlayer.value) {
+		videoPlayer.value.volume = volume.value / 100
+		if (volume.value > 0) {
+			isMuted.value = false
+			videoPlayer.value.muted = false
+		}
+	}
+}
+
+const goToStart = () => {
+	seek(0)
+}
+
+const toggleFullscreen = () => {
+	if (!videoPlayer.value) return
+	
+	if (!document.fullscreenElement) {
+		videoPlayer.value.requestFullscreen()
+	} else {
+		document.exitFullscreen()
+	}
+}
+
+// Keyboard shortcuts
+const handleKeyPress = (event: KeyboardEvent) => {
+	// Don't trigger if user is typing in an input
+	if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) {
+		return
+	}
+
+	switch (event.key) {
+		case ' ':
+		case 'k':
+			event.preventDefault()
+			togglePlayback()
+			break
+		case 'ArrowLeft':
+			event.preventDefault()
+			seekBackward()
+			break
+		case 'ArrowRight':
+			event.preventDefault()
+			seekForward()
+			break
+		case 'f':
+			event.preventDefault()
+			toggleFullscreen()
+			break
+		case 'm':
+			event.preventDefault()
+			toggleMute()
+			break
+		case 'Home':
+			event.preventDefault()
+			goToStart()
+			break
+	}
+}
+
+onMounted(async () => {
+	// Add keyboard shortcuts
+	window.addEventListener('keydown', handleKeyPress)
+	
+	if (projectId) {
+		const result = await selectProject(projectId)
+		project.value = result.project
+		await fetchClips(projectId)
+		
+		// Auto-select first clip if available
+		if (clips.value.length > 0) {
+			selectClip(clips.value[0])
+		}
+	}
+})
+
+onUnmounted(() => {
+	window.removeEventListener('keydown', handleKeyPress)
+})
 
 const formatDuration = (seconds: number | undefined): string => {
 	if (!seconds) return '0:00'
@@ -610,7 +709,57 @@ const handleExport = async () => {
 
 .controls-left, .controls-right {
 	display: flex;
+	align-items: center;
 	gap: 0.5rem;
+}
+
+.volume-control {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+}
+
+.volume-slider {
+	width: 80px;
+	height: 4px;
+	border-radius: 2px;
+	background: rgb(55 65 81);
+	outline: none;
+	-webkit-appearance: none;
+	cursor: pointer;
+}
+
+.volume-slider::-webkit-slider-thumb {
+	-webkit-appearance: none;
+	appearance: none;
+	width: 12px;
+	height: 12px;
+	border-radius: 50%;
+	background: rgb(59 130 246);
+	cursor: pointer;
+}
+
+.volume-slider::-moz-range-thumb {
+	width: 12px;
+	height: 12px;
+	border-radius: 50%;
+	background: rgb(59 130 246);
+	cursor: pointer;
+	border: none;
+}
+
+.current-time {
+	font-weight: 600;
+	color: white;
+}
+
+.separator {
+	color: rgb(107 114 128);
+	margin: 0 0.25rem;
+}
+
+.total-time {
+	color: rgb(156 163 175);
 }
 
 .time-display {
