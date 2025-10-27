@@ -206,17 +206,43 @@
 					<h3>Timeline</h3>
 					<div class="timeline-controls">
 						<UButton 
-							@click="zoomIn"
-							icon="i-heroicons-plus"
+							@click="() => setZoom(0.5)"
 							size="xs"
 							variant="ghost"
-						/>
-						<span class="zoom-level">{{ Math.round(zoomLevel * 100) }}%</span>
+							:class="{ 'active-zoom': zoomLevel === 0.5 }"
+						>
+							50%
+						</UButton>
+						<UButton 
+							@click="() => setZoom(1)"
+							size="xs"
+							variant="ghost"
+							:class="{ 'active-zoom': zoomLevel === 1 }"
+						>
+							100%
+						</UButton>
+						<UButton 
+							@click="() => setZoom(2)"
+							size="xs"
+							variant="ghost"
+							:class="{ 'active-zoom': zoomLevel === 2 }"
+						>
+							200%
+						</UButton>
+						<div class="zoom-divider" />
 						<UButton 
 							@click="zoomOut"
 							icon="i-heroicons-minus"
 							size="xs"
 							variant="ghost"
+							title="Zoom out"
+						/>
+						<UButton 
+							@click="zoomIn"
+							icon="i-heroicons-plus"
+							size="xs"
+							variant="ghost"
+							title="Zoom in"
 						/>
 					</div>
 				</div>
@@ -225,28 +251,40 @@
 					<div v-if="clips.length === 0" class="empty-timeline">
 						<p>Timeline is empty</p>
 					</div>
-					<div v-else class="track">
-						<div class="track-header">
-							<span>Video Track</span>
+					<div v-else class="track-container">
+						<!-- Time Ruler -->
+						<div class="ruler-wrapper">
+							<div class="ruler-spacer" />
+							<TimelineTimeRuler 
+								:duration="duration || 100"
+								:pixels-per-second="pixelsPerSecond"
+							/>
 						</div>
-						<div 
-							class="track-content"
-							@click="handleTimelineClick"
-							ref="trackContainer"
-						>
-							<!-- Playhead Indicator -->
-							<TimelinePlayheadIndicator :playhead-position="playheadPixels" />
 
-							<!-- Clips -->
+						<!-- Track -->
+						<div class="track">
+							<div class="track-header">
+								<span>Video Track</span>
+							</div>
 							<div 
-								v-for="clip in clips" 
-								:key="clip.id"
-								class="timeline-clip"
-								:class="{ selected: selectedClip?.id === clip.id }"
-								:style="getClipStyle(clip)"
-								@click.stop="selectClip(clip)"
+								class="track-content"
+								@click="handleTimelineClick"
+								ref="trackContainer"
 							>
-								<span class="clip-label">{{ clip.name }}</span>
+								<!-- Playhead Indicator -->
+								<TimelinePlayheadIndicator :playhead-position="playheadPixels" />
+
+								<!-- Clips -->
+								<div 
+									v-for="clip in clips" 
+									:key="clip.id"
+									class="timeline-clip"
+									:class="{ selected: selectedClip?.id === clip.id }"
+									:style="getClipStyle(clip)"
+									@click.stop="selectClip(clip)"
+								>
+									<span class="clip-label">{{ clip.name }}</span>
+								</div>
 							</div>
 						</div>
 					</div>
@@ -264,7 +302,7 @@ const { currentProject, selectProject } = useProject()
 const { clips, addClip, fetchClips } = useClips()
 const { exportVideo } = useExport()
 const { currentTime, duration, isPlaying, togglePlay, seek, formatTime, setPlayheadPosition, initializePlayer } = usePlayer()
-const { zoomLevel, zoomIn, zoomOut } = useTimeline()
+const { zoomLevel, zoomIn, zoomOut, setZoom } = useTimeline()
 const { pipConfig, applyShape: applyPipShape, getShapeCSS } = usePipShape()
 
 const selectedClip = ref<any>(null)
@@ -797,14 +835,19 @@ const handleExport = async () => {
 .timeline-controls {
 	display: flex;
 	align-items: center;
-	gap: 0.5rem;
+	gap: 0.25rem;
 }
 
-.zoom-level {
-	font-size: 0.75rem;
-	color: rgb(156 163 175);
-	min-width: 3rem;
-	text-align: center;
+.active-zoom {
+	background-color: rgb(59 130 246) !important;
+	color: white !important;
+}
+
+.zoom-divider {
+	width: 1px;
+	height: 20px;
+	background-color: rgb(55 65 81);
+	margin: 0 0.25rem;
 }
 
 .timeline-tracks {
@@ -819,6 +862,22 @@ const handleExport = async () => {
 	justify-content: center;
 	height: 100%;
 	color: rgb(107 114 128);
+}
+
+.track-container {
+	display: flex;
+	flex-direction: column;
+}
+
+.ruler-wrapper {
+	display: flex;
+	background-color: rgb(17 24 39);
+}
+
+.ruler-spacer {
+	width: 120px;
+	flex-shrink: 0;
+	border-right: 1px solid rgb(55 65 81);
 }
 
 .track {
