@@ -4,13 +4,15 @@
 			<h2 class="text-2xl font-bold">Sign In to ClipForge</h2>
 		</template>
 
-		<UFormGroup label="Email" name="email" class="mb-4">
-			<UInput v-model="email" type="email" placeholder="your@email.com" />
-		</UFormGroup>
+		<div class="form-field">
+			<label class="label">Email</label>
+			<UInput v-model="email" type="email" placeholder="your@email.com" class="mb-4" />
+		</div>
 
-		<UFormGroup label="Password" name="password" class="mb-4">
-			<UInput v-model="password" type="password" placeholder="••••••••" />
-		</UFormGroup>
+		<div class="form-field">
+			<label class="label">Password</label>
+			<UInput v-model="password" type="password" placeholder="••••••••" class="mb-4" />
+		</div>
 
 		<div class="flex gap-2">
 			<UButton @click="handleSignIn" :loading="loading" block>
@@ -37,6 +39,20 @@
 	</UCard>
 </template>
 
+<style scoped>
+.label {
+	display: block;
+	font-weight: 500;
+	margin-bottom: 0.5rem;
+	color: rgb(17 24 39);
+}
+
+.form-field {
+	margin-bottom: 1rem;
+}
+</style>
+
+
 <script setup lang="ts">
 const { signIn, signUp, signInWithOAuth } = useAuth()
 
@@ -53,12 +69,13 @@ const handleSignIn = async () => {
 
 	loading.value = true
 	error.value = ''
-	const { user, error: err } = await signIn(email.value, password.value)
 	
-	if (err) {
-		error.value = err
+	const result = await signIn(email.value, password.value)
+	
+	if (result.error) {
+		error.value = result.error
 	} else {
-		await navigateTo('/library')
+		await navigateTo('/projects')
 	}
 	
 	loading.value = false
@@ -72,19 +89,29 @@ const handleSignUp = async () => {
 
 	loading.value = true
 	error.value = ''
-	const { user, error: err } = await signUp(email.value, password.value)
 	
-	if (err) {
-		error.value = err
+	const result = await signUp(email.value, password.value)
+	
+	if (result.error) {
+		error.value = result.error
 	} else {
-		await navigateTo('/library')
+		await navigateTo('/projects')
 	}
 	
 	loading.value = false
 }
 
 const handleOAuth = async (provider: 'github' | 'google') => {
-	await signInWithOAuth(provider)
+	loading.value = true
+	error.value = ''
+	
+	try {
+		await signInWithOAuth(provider)
+	} catch (err: any) {
+		error.value = err.message || 'OAuth sign-in failed'
+	}
+	
+	loading.value = false
 }
 </script>
 
