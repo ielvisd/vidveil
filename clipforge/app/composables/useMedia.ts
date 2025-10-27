@@ -5,6 +5,7 @@ export interface MediaFile {
 	id: string
 	name: string
 	path: string
+	src: string // Object URL for video playback
 	size: number
 	type: string
 	duration?: number
@@ -68,6 +69,7 @@ export const useMedia = () => {
 
 	const processFile = async (file: File): Promise<MediaFile> => {
 		const isVideo = file.type.startsWith('video/')
+		const objectUrl = URL.createObjectURL(file)
 		
 		let duration: number | undefined
 		let thumbnail: string | undefined
@@ -80,7 +82,8 @@ export const useMedia = () => {
 		return {
 			id: `${Date.now()}-${Math.random()}`,
 			name: file.name,
-			path: file.path || URL.createObjectURL(file),
+			path: file.path || objectUrl,
+			src: objectUrl, // For video playback
 			size: file.size,
 			type: file.type,
 			duration,
