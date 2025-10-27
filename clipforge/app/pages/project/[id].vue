@@ -154,16 +154,16 @@
 							@loadedmetadata="handleVideoLoaded"
 						/>
 						
-						<!-- PiP Overlay (Webcam Feed) -->
-						<PipPipOverlay
-							v-if="webcamClip && pipConfig"
-							:webcam-clip="webcamClip"
-							:pip-config="pipConfig"
-							:container-width="containerWidth"
-							:container-height="containerHeight"
-							@remove="removePip"
-							@update-position="updatePipPosition"
-						/>
+					<!-- PiP Overlay (Webcam Feed) -->
+					<PipOverlay
+						v-if="webcamClip && pipConfig"
+						:webcam-clip="webcamClip"
+						:pip-config="pipConfig"
+						:container-width="containerWidth"
+						:container-height="containerHeight"
+						@remove="removePip"
+						@update-position="updatePipPosition"
+					/>
 
 						<div v-if="pipConfig" class="pip-indicator">
 							<span>PiP Active: {{ pipConfig.shape }}</span>
