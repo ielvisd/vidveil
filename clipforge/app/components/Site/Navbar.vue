@@ -30,5 +30,17 @@
 
 <script lang="ts" setup>
 	const { pages } = usePages();
-	const tauriVersion = await useTauriAppGetTauriVersion();
+	
+	// Only use Tauri in Tauri environment
+	const tauriVersion = ref('n/a');
+	
+	onMounted(async () => {
+		if (import.meta.env.TAURI_PLATFORM) {
+			try {
+				tauriVersion.value = await useTauriAppGetTauriVersion();
+			} catch (error) {
+				console.warn('Tauri not available:', error);
+			}
+		}
+	});
 </script>
