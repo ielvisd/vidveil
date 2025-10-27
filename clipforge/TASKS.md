@@ -279,11 +279,11 @@ graph TB
 **Description:** Build multi-track timeline system with track controls.
 
 **Tasks:**
-- [ ] Create 2-track system (main video + PiP overlay)
-- [ ] Implement clip stacking and ordering
-- [ ] Add track muting/soloing
-- [ ] Create snap-to-grid functionality
-- [ ] Add keyboard shortcuts (Space=play, I/O=trim points)
+- [x] Create 2-track system (main video + PiP overlay)
+- [x] Implement clip stacking and ordering
+- [x] Add track muting/soloing
+- [x] Create snap-to-grid functionality
+- [x] Add keyboard shortcuts (Space=play, I/O=trim points)
 
 **Files to Create:**
 - `components/timeline/Track.vue`
