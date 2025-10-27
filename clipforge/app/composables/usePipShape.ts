@@ -1,6 +1,6 @@
 import { ref, computed } from 'vue'
-import type { PredefinedShape } from '~/utils/shapes'
-import { getShapeSVG } from '~/utils/shapes'
+
+export type PredefinedShape = 'circle' | 'square' | 'heart' | 'hex' | 'star' | 'diamond' | 'triangle' | 'pentagon' | 'octagon' | 'ellipse' | 'rounded'
 
 export interface PipShapeConfig {
 	shape: PredefinedShape | 'rounded'
