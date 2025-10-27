@@ -1,0 +1,73 @@
+# ClipForge Development Rules
+
+## Core Principles
+
+You are building ClipForge, an AI-powered desktop video editor using Tauri + Nuxt 4 + NuxtUI 4 with PiP Magic features.
+
+## Critical Development Requirements
+
+### MCP Integration is MANDATORY
+**ALWAYS USE MCP servers for Nuxt, NuxtUI, and Vue development:**
+
+1. **For ANY Nuxt 4 question** - Use `mcp_nuxt-mcp` to fetch documentation and examples
+2. **For ANY Vue component question** - Use `mcp_vue-mcp` for component patterns and best practices
+3. **For ANY NuxtUI component** - Use `mcp_vue-mcp` to search for NuxtUI component documentation
+4. **For architecture questions** - Use `mcp_context7` for real-time examples and docs
+5. **For debugging** - Use `mcp_chrome-devtools-mcp` to inspect browser issues
+6. **For testing** - Use `mcp_playwright-mcp` to generate and run E2E tests
+7. **For Supabase** - Use `mcp_supabase-mcp` for database operations
+8. **For deployment** - Use `mcp_vercel-mcp` for deployment workflows
+
+**DO NOT guess at Nuxt/NuxtUI implementation details. ALWAYS query MCP tools first.**
+
+### State Management
+- **USE Vue 3 composables for state management** - NO Pinia stores
+- Create composables in `composables/` directory
+- Use composables like `useProject()`, `useTimeline()`, `useClips()`
+- All state is managed through composables with reactive refs
+
+### AI Integration
+- **USE Vercel AI SDK** (`ai` package) for AI features
+- Integrate **OpenAI API** for natural language shape generation
+- Use `composables/useAI.ts` for all AI interactions
+- Store API key in `.env` as `OPENAI_API_KEY`
+
+### File Structure
+- Pages go in `pages/`
+- Components in `components/` with proper subdirectories
+- Composables in `composables/`
+- Utils in `utils/`
+- Tauri Rust code in `src-tauri/src/`
+
+### Testing
+- Write E2E tests using Playwright (via playwright-mcp)
+- Test all major user flows (record, edit, export)
+- Aim for 80%+ test coverage
+
+### Performance Requirements
+- 60fps PiP preview rendering
+- <4s app launch time
+- Optimize Konva timeline for 10+ clips
+- Use lazy loading for thumbnails
+
+### API Keys & Environment
+- Store all keys in `.env` file
+- Never commit sensitive keys
+- Use Supabase for cloud sync
+- Use OpenAI for AI shape generation
+
+## Build Workflow
+
+1. Always check `TASKS.md` before starting new work
+2. Create proper PRs for major features (refer to PR tasks in TASKS.md)
+3. Use MCP tools BEFORE writing code
+4. Test thoroughly before marking tasks complete
+5. Update TASKS.md checkboxes as you complete work
+
+## When In Doubt
+
+1. Query MCP tools for documentation/examples
+2. Check existing codebase patterns
+3. Ask for clarification rather than guessing
+4. Follow Vue 3 / Nuxt 4 best practices
+
