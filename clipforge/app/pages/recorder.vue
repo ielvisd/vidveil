@@ -29,11 +29,15 @@ watch(() => stream.value, () => {
 
 <style scoped>
 .recorder-page {
-	@apply py-8;
+	padding-top: 2rem;
+	padding-bottom: 2rem;
 }
 
 .recording-preview {
-	@apply w-full max-w-4xl mx-auto;
+	width: 100%;
+	max-width: 56rem;
+	margin: 0 auto;
+	margin-top: 2rem;
 }
 </style>
 

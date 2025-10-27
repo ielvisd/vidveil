@@ -57,7 +57,8 @@ const handleAddToProject = async () => {
 
 <style scoped>
 .library-page {
-	@apply py-8;
+	padding-top: 2rem;
+	padding-bottom: 2rem;
 }
 
 .header {
