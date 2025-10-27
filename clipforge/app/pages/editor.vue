@@ -1,18 +1,22 @@
 <template>
 	<UContainer class="editor-page">
 		<div class="editor-layout">
-			<!-- Video Preview -->
-			<div class="preview-section">
-				<PlayerVideoPreview v-if="currentClip" :src="currentClip.src" />
-				<div v-else class="empty-preview">
-					<p>No video selected</p>
-				</div>
+		<!-- Video Preview -->
+		<div class="preview-section">
+			<div v-if="currentClip" class="video-preview-container">
+				<video :src="currentClip.src" controls class="video-preview" />
 			</div>
+			<div v-else class="empty-preview">
+				<p>No video selected</p>
+			</div>
+		</div>
 
 			<!-- Timeline -->
 			<div class="timeline-section">
 				<LibraryMediaLibrary ref="mediaLibrary" />
-				<TimelineTimeline :duration="totalDuration" />
+				<div class="timeline-container">
+					<p>Timeline coming soon...</p>
+				</div>
 			</div>
 
 			<!-- Controls -->
@@ -99,6 +103,21 @@ onMounted(() => {
 	height: 200px;
 	background-color: rgb(31 41 55);
 	border-top: 1px solid rgb(55 65 81);
+	padding: 1rem;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.video-preview-container {
+	width: 100%;
+	height: 100%;
+}
+
+.video-preview {
+	width: 100%;
+	height: 100%;
+	object-fit: contain;
 }
 
 .controls-section {
