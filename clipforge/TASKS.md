@@ -224,11 +224,11 @@ graph TB
 **Description:** Integrate MediaPipe for face detection and basic PiP masking.
 
 **Tasks:**
-- [ ] Integrate MediaPipe Selfie Segmentation
-- [ ] Create face detection on video import
-- [ ] Implement basic circular mask with `clip-path`
-- [ ] Auto-detect webcam footage vs screen recording
-- [ ] Create PiP preview overlay on video player
+- [x] Integrate TensorFlow.js Body Segmentation (replaces MediaPipe Selfie)
+- [x] Create face detection on video import
+- [x] Implement basic circular mask with `clip-path`
+- [x] Auto-detect webcam footage vs screen recording
+- [x] Create PiP preview overlay on video player
 
 **Files to Create:**
 - `composables/useMediaPipe.ts`
