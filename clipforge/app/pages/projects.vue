@@ -47,6 +47,10 @@ const error = ref('')
 onMounted(async () => {
 	if (!isAuthenticated.value) {
 		error.value = 'Please log in to view your projects'
+		// Redirect to login after 2 seconds
+		setTimeout(() => {
+			navigateTo('/login')
+		}, 2000)
 		loading.value = false
 		return
 	}

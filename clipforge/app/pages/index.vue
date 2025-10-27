@@ -3,14 +3,17 @@
 		<div class="hero-section">
 			<h1 class="hero-title">ClipForge</h1>
 			<p class="hero-subtitle">AI-Powered Video Editor with PiP Magic</p>
-			<div class="cta-buttons">
-				<UButton to="/projects" size="xl" color="primary">
-					My Projects
-				</UButton>
-				<UButton to="/library" size="xl" variant="outline">
-					Import Media
-				</UButton>
-			</div>
+		<div class="cta-buttons">
+			<UButton to="/projects" size="xl" color="primary">
+				My Projects
+			</UButton>
+			<UButton to="/library" size="xl" variant="outline">
+				Import Media
+			</UButton>
+			<UButton to="/login" size="xl" variant="soft">
+				Login
+			</UButton>
+		</div>
 		</div>
 
 		<div class="features-section">
