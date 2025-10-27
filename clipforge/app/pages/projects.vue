@@ -46,7 +46,7 @@ const error = ref('')
 
 onMounted(async () => {
 	// Wait for auth to initialize
-	const { loading: authLoading } = useAuth()
+	const { loading: authLoading, user: authUser } = useAuth()
 	
 	// Wait for auth loading to complete
 	while (authLoading.value) {
@@ -57,9 +57,12 @@ onMounted(async () => {
 	await nextTick()
 	
 	// Check auth status
-	console.log('Auth status:', isAuthenticated.value, user.value)
+	console.log('Auth status:', isAuthenticated.value, user.value, authUser.value)
 	
-	if (!isAuthenticated.value) {
+	// Force re-check after a short delay
+	await new Promise(resolve => setTimeout(resolve, 100))
+	
+	if (!isAuthenticated.value && !authUser.value) {
 		error.value = 'Please log in to view your projects'
 		// Redirect to login after 2 seconds
 		setTimeout(() => {
