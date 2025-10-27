@@ -90,9 +90,6 @@ const handleSeek = (event: MouseEvent) => {
 	const rect = progressBar.getBoundingClientRect()
 	const percent = (event.clientX - rect.left) / rect.width
 	const newTime = percent * props.duration
-	
-	// Emit would be handled by parent
-	// For now we just calculate the time
 }
 
 const toggleFullscreen = () => {
@@ -106,39 +103,61 @@ const toggleFullscreen = () => {
 
 <style scoped>
 .player-controls {
-	bg-gray-900 rounded-b-lg p-4;
+	background-color: rgb(17 24 39);
+	border-radius: 0 0 0.5rem 0.5rem;
+	padding: 1rem;
 }
 
 .progress-bar {
-	h-2 bg-gray-700 rounded-full mb-4 cursor-pointer relative;
+	height: 0.5rem;
+	background-color: rgb(55 65 81);
+	border-radius: 9999px;
+	margin-bottom: 1rem;
+	cursor: pointer;
+	position: relative;
 }
 
 .progress-fill {
-	h-full bg-blue-500 rounded-full relative;
+	height: 100%;
+	background-color: rgb(59 130 246);
+	border-radius: 9999px;
+	position: relative;
 }
 
 .progress-handle {
-	absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 bg-blue-500 border-radius: 9999px;
+	position: absolute;
+	right: 0;
+	top: 50%;
+	transform: translateY(-50%);
+	width: 0.75rem;
+	height: 0.75rem;
+	background-color: rgb(59 130 246);
+	border-radius: 9999px;
 }
 
 .controls-row {
-	flex items-center justify-between;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
 }
 
 .controls-left {
-	flex gap-2;
+	display: flex;
+	gap: 0.5rem;
 }
 
 .controls-center {
-	flex-grow text-center;
+	flex-grow: 1;
+	text-align: center;
 }
 
 .time-display {
-	text-sm text-gray-300;
+	font-size: 0.875rem;
+	color: rgb(209 213 219);
 }
 
 .controls-right {
-	flex gap-2;
+	display: flex;
+	gap: 0.5rem;
 }
 </style>
-
