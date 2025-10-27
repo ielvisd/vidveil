@@ -45,6 +45,12 @@ const loading = ref(true)
 const error = ref('')
 
 onMounted(async () => {
+	// Wait for auth to finish loading
+	await nextTick()
+	
+	// Check auth status
+	console.log('Auth status:', isAuthenticated.value, user.value)
+	
 	if (!isAuthenticated.value) {
 		error.value = 'Please log in to view your projects'
 		// Redirect to login after 2 seconds
