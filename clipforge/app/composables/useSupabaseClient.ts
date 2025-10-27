@@ -1,6 +1,13 @@
 import { createClient } from '@supabase/supabase-js'
 
+let supabaseClient: any = null
+
 export const useSupabaseClient = () => {
+	// Return existing client if already created
+	if (supabaseClient) {
+		return supabaseClient
+	}
+
 	const config = useRuntimeConfig()
 	
 	const supabaseUrl = config.public.supabaseUrl as string
@@ -11,6 +18,8 @@ export const useSupabaseClient = () => {
 		return null
 	}
 
-	return createClient(supabaseUrl, supabaseKey)
+	// Create singleton instance
+	supabaseClient = createClient(supabaseUrl, supabaseKey)
+	return supabaseClient
 }
 
