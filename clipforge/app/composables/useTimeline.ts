@@ -64,6 +64,10 @@ export const useTimeline = () => {
 		return Math.round(time / gridSize) * gridSize
 	}
 
+	const setZoom = (level: number) => {
+		zoomLevel.value = Math.max(0.1, Math.min(level, 10))
+	}
+
 	return {
 		currentTime,
 		duration,
@@ -82,6 +86,7 @@ export const useTimeline = () => {
 		zoomIn,
 		zoomOut,
 		resetZoom,
+		setZoom,
 		snapToGrid
 	}
 }
