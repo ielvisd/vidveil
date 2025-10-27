@@ -844,6 +844,17 @@ const handleExport = () => {
 	}
 }
 
+.clip-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	width: 100%;
+}
+
+.clip-header h3 {
+	margin: 0;
+}
+
 .properties {
 	display: flex;
 	flex-direction: column;

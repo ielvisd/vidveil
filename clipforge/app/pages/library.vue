@@ -10,15 +10,16 @@
 			>
 				Back
 			</UButton>
-			<h1>Media Library</h1>
-			<UButton 
-				@click="handleAddToProject" 
-				:disabled="!canAddToProject"
-				color="primary"
-				size="sm"
-			>
-				Add to Project
-			</UButton>
+		<h1>Media Library</h1>
+		<UButton 
+			@click="handleAddToProject" 
+			:disabled="!canAddToProject || adding"
+			:loading="adding"
+			color="primary"
+			size="sm"
+		>
+			{{ adding ? 'Adding...' : 'Add to Project' }}
+		</UButton>
 		</div>
 
 		<!-- Stats -->
@@ -73,13 +74,17 @@ const formatFileSize = (bytes: number): string => {
 	return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i]
 }
 
-const handleAddToProject = async () => {
-	if (!selectedMedia.value || !currentProject.value) return
+const adding = ref(false)
 
+const handleAddToProject = async () => {
+	if (!selectedMedia.value || !currentProject.value || adding.value) return
+
+	adding.value = true
 	try {
 		await addClip(currentProject.value.id, selectedMedia.value.src, {
 			name: selectedMedia.value.name,
 			duration: selectedMedia.value.duration || 0,
+			fileSize: selectedMedia.value.size || 0,
 			...selectedMedia.value.metadata
 		})
 		
@@ -87,6 +92,8 @@ const handleAddToProject = async () => {
 		await navigateTo(`/project/${currentProject.value.id}`)
 	} catch (error) {
 		console.error('Failed to add clip:', error)
+	} finally {
+		adding.value = false
 	}
 }
 
