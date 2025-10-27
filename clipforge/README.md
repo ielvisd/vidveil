@@ -1,97 +1,176 @@
-<p align="center">
-    <img width="150" src="./public/logo.png" alt="logo">
-</p>
-<h1 align="center">NUXTOR</h1>
-<p align="center">
-A spiritual successor of <a href="https://github.com/NicolaSpadari/vitauri">ViTauri</a>, made with <a href="https://nuxt.com">Nuxt 4</a> and <a href="https://v2.tauri.app">Tauri 2</a>
-<br>
-Build super fast desktop applications!
-</p>
+# ClipForge
 
-<br />
+AI-Powered Desktop Video Editor with PiP Magic 🎬✨
 
-<p float="left">
-	<img src="https://img.shields.io/github/package-json/v/NicolaSpadari/nuxtor" />
-	<img src="https://img.shields.io/github/license/NicolaSpadari/nuxtor" />
-</p>
+Built with **Tauri + Nuxt 4 + NuxtUI 4** for lightning-fast native performance.
 
-<br />
+![ClipForge](./docs/clipforge-hero.png)
 
-<div align="center">
-<img src="./public/screenshot.png">
-</div>
+## 🚀 Features
 
-<p align="center">Powered by Nuxt 4</p>
+### Core Editing
+- ✂️ **Timeline Editing** - Trim, split, and arrange video clips
+- 📁 **Drag & Drop** - Import media files seamlessly
+- 🎥 **Screen Recording** - Built-in screen capture with webcam overlay
+- 📷 **Webcam Support** - Record with camera feed
 
-Check more screenshots at [preview](https://github.com/NicolaSpadari/nuxtor/blob/main/preview.md)
+### AI-Powered PiP Magic
+- ✨ **Custom Shapes** - Generate any shape with natural language
+- 🎯 **Smart Positioning** - AI automatically places PiP overlays
+- 🎬 **Professional Effects** - Border, shadow, and animation controls
 
-<br />
+### Cloud Sync
+- ☁️ **Supabase Integration** - Auto-save projects to cloud
+- 🔄 **Multi-Device** - Access projects from anywhere
+- 👥 **Collaborative** - Share projects with your team
 
-## Technologies run-down
+## 🛠️ Tech Stack
 
-- Nuxt v4
-- Tauri v2
-- NuxtUI v4
-- TailwindCSS v4
-- Typescript
-- ESLint
-- Auto imports (for Tauri api too!)
+- **Frontend**: Nuxt 4 + NuxtUI 4 + Vue 3
+- **Desktop**: Tauri 2 (Rust)
+- **Video**: FFmpeg + Konva.js
+- **AI**: OpenAI (GPT-4) + Vercel AI SDK
+- **Backend**: Supabase (PostgreSQL)
+- **AI Models**: TensorFlow.js Body Segmentation
 
-## Functionalities
+## 📦 Installation
 
-- Run shell commands from the app
-- Send custom notifications to the client (remember to turn on/grant notifications in your computer settings)
-- Display OS related informations
-- Store and retrieve data locally
-- Show tray icon
-- Support all Nuxt functionalities (routing/layout/middleware/modules/etc...)
+### Prerequisites
+- Node.js >= 23
+- Bun >= 1.2.22
+- Rust (for Tauri desktop builds)
 
-## Setup
+### Setup
 
-  - Before running this app, you need to configure your environment with Rust. Take a look at the [Tauri docs](https://tauri.app/start/prerequisites).
-  - This project enforces [bun](https://bun.sh). In order to use another package manager you need to update `package.json` and `tauri.conf.json`
-  - The frontend runs on the usual port `3000` of Nuxt, the Tauri server uses the port `3001`. This settings are customizable in the `nuxt.config.ts` and `tauri.conf.json`.
-  - Once ready, follow these commands:
+1. **Clone the repo**
+```bash
+git clone https://github.com/ielvisd/vidveil.git
+cd clipforge
+```
 
-  ```sh
-  # use this template
-  $ npx degit NicolaSpadari/nuxtor my-nuxtor-app
+2. **Install dependencies**
+```bash
+bun install
+```
 
-  # go into the folder
-  $ cd my-nuxtor-app
+3. **Configure environment**
+Create `.env` file:
+```env
+PUBLIC_SUPABASE_URL=your_supabase_url
+PUBLIC_SUPABASE_KEY=your_supabase_key
+OPENAI_API_KEY=your_openai_key
+```
 
-  # install dependencies
-  $ bun install
+4. **Run migrations**
+Go to Supabase Dashboard → SQL Editor and run `docs/supabase-schema.sql`
 
-  # start the project
-  $ bun run tauri:dev
-  ```
+5. **Start dev server**
+```bash
+# Browser mode
+bun run dev
 
-  This will run the Nuxt frontend and will launch the Tauri window.
+# Desktop mode (requires Rust)
+bun run tauri:dev
+```
 
-## Build
+## 📖 Usage
 
-  ```sh
-  $ bun run tauri:build
-  ```
+### Creating Your First Project
 
-This command will generate the Nuxt static output and bundle the project under `src-tauri/target`.
+1. **Launch ClipForge** → Click "My Projects"
+2. **Sign In** → Use email/password or OAuth (GitHub/Google)
+3. **Create Project** → Click "New Project" and enter a name
+4. **Import Media** → Click "Import Media" or record screen
+5. **Edit** → Drag clips to timeline, trim, arrange
+6. **Add PiP** → Select a shape from the PiP panel
+7. **Export** → Click "Export Video" to render
 
-## Debug
+### Natural Language Shapes
 
-  ```sh
-  $ bun run tauri:build:debug
-  ```
+Describe any shape you want:
+- "Make it a heart"
+- "Star shape please"
+- "Heptagon"
+- "Custom hexagon with rounded corners"
 
-The same Tauri bundle will generate under `src-tauri/target`, but with the ability to open the console.
+The AI will generate the perfect PiP shape!
 
-## Notes
+## 🏗️ Project Structure
 
-- Tauri v2 brings some big refactors, such as packages names and permission management. New permissions have to be granted under `src-tauri/capabilities/main.json`
-- Tauri functions are auto imported with the help of a custom module, named like `useTauri<LibraryName>`. If another Tauri plugin is added, then the module has to be updated to support its functions under `app/modules/tauri.ts`
-- As per [documentation](https://tauri.app/start/frontend/nuxt/#checklist), Nuxt SSR must be disabled in order for Tauri to act as the backend. Still, all Nuxt goodies will be functional.
-- NuxtUI is a very powerful UI library that consolidates design over the entire application. While version 4 is still in alpha, it includes old pro components of the v3.
+```
+clipforge/
+├── app/
+│   ├── pages/           # Routes
+│   │   ├── projects.vue
+│   │   ├── project/[id].vue
+│   │   ├── library.vue
+│   │   ├── recorder.vue
+│   │   └── login.vue
+│   ├── components/      # Reusable components
+│   ├── composables/     # Vue composables (state)
+│   └── layouts/         # Page layouts
+├── src-tauri/           # Rust backend
+│   ├── src/
+│   │   ├── commands/    # Tauri commands
+│   │   └── lib.rs
+└── docs/                # Documentation
+    ├── supabase-schema.sql
+    └── mcp-setup.md
+```
 
-## License
+## 🧪 Development
 
-MIT License © 2024-PRESENT [NicolaSpadari](https://github.com/NicolaSpadari)
+### Available Scripts
+
+```bash
+# Development
+bun run dev              # Browser mode
+bun run tauri:dev        # Desktop mode with hot reload
+
+# Build
+bun run generate         # Static site
+bun run tauri:build      # Desktop app
+
+# Code Quality
+bun run lint             # ESLint
+```
+
+### MCP Servers
+
+This project uses Model Context Protocol for development assistance:
+
+- `@nuxt-mcp` - Nuxt 4 documentation
+- `@vue-mcp` - Vue components & NuxtUI
+- `@supabase-mcp` - Database operations
+- `@playwright-mcp` - E2E testing
+
+See `.cursor/mcp.json` for configuration.
+
+## 🎯 Roadmap
+
+- [x] PR-1 to PR-22: Core functionality
+- [ ] PR-21: FFmpeg Export Pipeline
+- [ ] PR-22: Export UI & Progress
+- [ ] PR-24: Performance Optimization
+- [ ] PR-27: E2E Tests with Playwright
+- [ ] PR-32: App Packaging & Distribution
+
+See [TASKS.md](./TASKS.md) for complete task list.
+
+## 🤝 Contributing
+
+This is a personal project, but feedback is welcome!
+
+## 📄 License
+
+MIT © Elvis Ibarra
+
+## 🙏 Acknowledgments
+
+- Built on [Nuxtor](https://github.com/NicolaSpadari/nuxtor) template
+- Powered by [Tauri](https://tauri.app), [Nuxt](https://nuxt.com), [NuxtUI](https://ui.nuxt.com)
+- AI by [OpenAI](https://openai.com) and [Vercel AI SDK](https://sdk.vercel.ai)
+
+---
+
+**Made with ❤️ by Elvis Ibarra**
