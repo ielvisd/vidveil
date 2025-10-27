@@ -56,19 +56,19 @@ const formatTime = (seconds: number): string => {
 
 <style scoped>
 .timeline-ruler {
-	@apply relative h-8 bg-gray-800 border-b border-gray-700;
+	relative h-8 bg-gray-800 border-b border-gray-700;
 }
 
 .ruler-mark {
-	@apply absolute h-full flex flex-col items-center;
+	absolute h-full flex flex-col items-center;
 }
 
 .ruler-line {
-	@apply w-px h-2 bg-gray-500;
+	w-px h-2 bg-gray-500;
 }
 
 .ruler-label {
-	@apply text-xs text-gray-400 mt-1;
+	text-xs text-gray-400 mt-1;
 }
 </style>
 

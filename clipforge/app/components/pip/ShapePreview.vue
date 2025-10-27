@@ -31,11 +31,11 @@ const previewStyle = computed(() => {
 
 <style scoped>
 .shape-preview {
-	@apply flex items-center justify-center bg-gray-100 rounded-lg overflow-hidden;
+	flex items-center justify-center bg-gray-100 rounded-lg overflow-hidden;
 }
 
 .preview-content {
-	@apply w-full h-full flex items-center justify-center;
+	w-full h-full flex items-center justify-center;
 }
 </style>
 

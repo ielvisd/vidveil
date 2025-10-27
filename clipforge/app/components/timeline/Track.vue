@@ -42,27 +42,27 @@ defineEmits<{
 
 <style scoped>
 .track {
-	@apply border-b border-gray-700;
+	border-b border-gray-700;
 }
 
 .track.active {
-	@apply bg-gray-800;
+	bg-gray-800;
 }
 
 .track-header {
-	@apply flex items-center justify-between px-4 py-2 bg-gray-900;
+	flex items-center justify-between px-4 py-2 bg-gray-900;
 }
 
 .track-name {
-	@apply text-sm font-medium text-gray-300;
+	text-sm font-medium text-gray-300;
 }
 
 .track-controls {
-	@apply flex gap-2;
+	flex gap-2;
 }
 
 .track-content {
-	@apply relative min-h-[80px];
+	relative min-h-[80px];
 }
 </style>
 

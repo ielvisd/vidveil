@@ -85,20 +85,20 @@ watch(() => props.src, () => {
 
 <style scoped>
 .video-preview {
-	@apply w-full h-full flex flex-col;
+	w-full h-full flex flex-col;
 }
 
 .player-container {
-	@apply flex-1 bg-black rounded-t-lg overflow-hidden relative;
+	flex-1 bg-black rounded-t-lg overflow-hidden relative;
 	aspect-ratio: 16/9;
 }
 
 .video-player {
-	@apply w-full h-full object-contain;
+	w-full h-full object-contain;
 }
 
 .empty-state {
-	@apply absolute inset-0 flex flex-col items-center justify-center;
+	absolute inset-0 flex flex-col items-center justify-center;
 }
 </style>
 

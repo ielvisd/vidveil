@@ -81,24 +81,24 @@ const handleFileSelect = async (event: Event) => {
 
 <style scoped>
 .media-library {
-	@apply w-full h-full;
+	w-full h-full;
 }
 
 .drop-zone {
-	@apply border-2 border-dashed border-gray-300 rounded-lg p-8 transition-colors;
+	border-2 border-dashed border-gray-300 rounded-lg p-8 transition-colors;
 	min-height: 400px;
 }
 
 .drop-zone.dragging {
-	@apply border-blue-500 bg-blue-50;
+	border-blue-500 bg-blue-50;
 }
 
 .empty-state {
-	@apply flex flex-col items-center justify-center h-full;
+	flex flex-col items-center justify-center h-full;
 }
 
 .media-grid {
-	@apply grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4;
+	grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4;
 }
 </style>
 

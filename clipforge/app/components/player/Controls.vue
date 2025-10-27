@@ -106,39 +106,39 @@ const toggleFullscreen = () => {
 
 <style scoped>
 .player-controls {
-	@apply bg-gray-900 rounded-b-lg p-4;
+	bg-gray-900 rounded-b-lg p-4;
 }
 
 .progress-bar {
-	@apply h-2 bg-gray-700 rounded-full mb-4 cursor-pointer relative;
+	h-2 bg-gray-700 rounded-full mb-4 cursor-pointer relative;
 }
 
 .progress-fill {
-	@apply h-full bg-blue-500 rounded-full relative;
+	h-full bg-blue-500 rounded-full relative;
 }
 
 .progress-handle {
-	@apply absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 bg-blue-500 rounded-full;
+	absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 bg-blue-500 border-radius: 9999px;
 }
 
 .controls-row {
-	@apply flex items-center justify-between;
+	flex items-center justify-between;
 }
 
 .controls-left {
-	@apply flex gap-2;
+	flex gap-2;
 }
 
 .controls-center {
-	@apply flex-grow text-center;
+	flex-grow text-center;
 }
 
 .time-display {
-	@apply text-sm text-gray-300;
+	text-sm text-gray-300;
 }
 
 .controls-right {
-	@apply flex gap-2;
+	flex gap-2;
 }
 </style>
 

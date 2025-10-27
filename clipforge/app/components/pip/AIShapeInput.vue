@@ -37,7 +37,7 @@ const handleShapeGenerated = (shape: any) => {
 
 <style scoped>
 .ai-shape-input {
-	@apply w-full;
+	w-full;
 }
 </style>
 

@@ -64,11 +64,11 @@ const updateBorder = () => {
 
 <style scoped>
 .pip-controls {
-	@apply p-4 bg-gray-900 rounded-lg;
+	p-4 bg-gray-900 border-radius: 0.5rem;
 }
 
 .controls-grid {
-	@apply grid grid-cols-1 gap-4;
+	grid grid-cols-1 gap-4;
 }
 </style>
 

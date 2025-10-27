@@ -73,23 +73,23 @@ onUnmounted(() => {
 
 <style scoped>
 .recording-controls {
-	@apply p-6;
+	p-6;
 }
 
 .controls-center {
-	@apply flex justify-center;
+	flex justify-center;
 }
 
 .recording-indicator {
-	@apply mt-4 flex items-center gap-3 justify-center;
+	mt-4 flex items-center gap-3 justify-center;
 }
 
 .pulse-dot {
-	@apply w-3 h-3 bg-red-500 rounded-full animate-pulse;
+	w-3 h-3 bg-red-500 rounded-full animate-pulse;
 }
 
 .time {
-	@apply font-mono text-lg;
+	font-mono text-lg;
 }
 </style>
 

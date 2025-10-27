@@ -70,35 +70,35 @@ const handleMouseMove = (event: MouseEvent) => {
 
 <style scoped>
 .clip {
-	@apply absolute cursor-move bg-blue-600 border-2 border-blue-400 rounded transition-all;
+	absolute cursor-move bg-blue-600 border-2 border-blue-400 rounded transition-all;
 }
 
 .clip.selected {
-	@apply border-blue-300 ring-2 ring-blue-500;
+	border-blue-300 ring-2 ring-blue-500;
 }
 
 .clip.muted {
-	@apply opacity-50;
+	opacity-50;
 }
 
 .clip-content {
-	@apply h-full flex items-center gap-2 px-2;
+	h-full flex items-center gap-2 px-2;
 }
 
 .clip-thumbnail {
-	@apply w-12 h-full object-cover;
+	w-12 h-full object-cover;
 }
 
 .clip-info {
-	@apply flex flex-col;
+	flex flex-col;
 }
 
 .clip-name {
-	@apply text-xs font-medium truncate;
+	text-xs font-medium truncate;
 }
 
 .clip-duration {
-	@apply text-xs text-gray-300;
+	text-xs text-gray-300;
 }
 </style>
 

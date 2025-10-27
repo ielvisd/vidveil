@@ -64,43 +64,43 @@ const formatFileSize = (bytes: number): string => {
 
 <style scoped>
 .media-thumbnail {
-	@apply cursor-pointer rounded-lg overflow-hidden bg-gray-100 hover:bg-gray-200 transition-all;
+	cursor-pointer rounded-lg overflow-hidden bg-gray-100 hover:bg-gray-200 transition-all;
 }
 
 .media-thumbnail.selected {
-	@apply ring-2 ring-blue-500;
+	ring-2 ring-blue-500;
 }
 
 .thumbnail-container {
-	@apply relative aspect-video bg-gray-900;
+	relative aspect-video bg-gray-900;
 }
 
 .thumbnail-container img {
-	@apply w-full h-full object-cover;
+	w-full h-full object-cover;
 }
 
 .placeholder {
-	@apply w-full h-full flex items-center justify-center;
+	w-full h-full flex items-center justify-center;
 }
 
 .overlay {
-	@apply absolute inset-0 bg-black bg-opacity-0 hover:bg-opacity-60 transition-all flex items-center justify-center;
+	absolute inset-0 bg-black bg-opacity-0 hover:bg-opacity-60 transition-all flex items-center justify-center;
 }
 
 .duration {
-	@apply absolute bottom-2 right-2 bg-black bg-opacity-75 text-white text-xs px-2 py-1 rounded;
+	absolute bottom-2 right-2 bg-black bg-opacity-75 text-white text-xs px-2 py-1 border-radius: 0.25rem;
 }
 
 .info {
-	@apply p-3;
+	p-3;
 }
 
 .filename {
-	@apply text-sm font-medium truncate;
+	text-sm font-medium truncate;
 }
 
 .filesize {
-	@apply text-xs text-gray-500;
+	text-xs text-gray-500;
 }
 </style>
 

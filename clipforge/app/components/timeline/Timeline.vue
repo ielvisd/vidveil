@@ -83,15 +83,15 @@ onUnmounted(() => {
 
 <style scoped>
 .timeline-container {
-	@apply flex flex-col h-full;
+	flex flex-col h-full;
 }
 
 .timeline-tracks {
-	@apply flex-1 overflow-x-auto overflow-y-hidden;
+	flex-1 overflow-x-auto overflow-y-hidden;
 }
 
 .konva-canvas {
-	@apply w-full h-full;
+	w-full h-full;
 }
 </style>
 

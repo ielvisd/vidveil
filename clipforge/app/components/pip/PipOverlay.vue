@@ -42,11 +42,11 @@ const handleDrag = (event: MouseEvent) => {
 
 <style scoped>
 .pip-overlay {
-	@apply cursor-move transition-transform hover:scale-105;
+	cursor-move transition-transform hover:scale-105;
 }
 
 .pip-overlay:active {
-	@apply scale-95;
+	scale-95;
 }
 </style>
 
