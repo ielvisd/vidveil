@@ -100,9 +100,12 @@ const canExport = computed(() => clips.value.length > 0)
 const shapes = ['circle', 'square', 'heart', 'star', 'hexagon']
 const videoPlayer = ref<HTMLVideoElement | null>(null)
 
+const project = ref(currentProject.value)
+
 onMounted(async () => {
 	if (projectId) {
-		await selectProject(projectId)
+		const result = await selectProject(projectId)
+		project.value = result.project
 		await fetchClips(projectId)
 	}
 })
