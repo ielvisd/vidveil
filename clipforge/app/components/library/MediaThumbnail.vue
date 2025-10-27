@@ -7,17 +7,18 @@
 		<div class="thumbnail-container">
 			<img v-if="file.thumbnail" :src="file.thumbnail" :alt="file.name" />
 			<div v-else class="placeholder">
-				<UIcon name="i-heroicons-video-camera" class="text-4xl text-gray-400" />
+				<svg class="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+			</svg>
 			</div>
 
 			<div class="overlay">
-				<UButton
+				<button
 					@click.stop="$emit('remove')"
-					icon="i-heroicons-trash"
-					size="sm"
-					color="red"
-					variant="solid"
-				/>
+					class="inline-flex items-center px-2 py-1 text-xs font-medium text-white bg-red-600 rounded hover:bg-red-700"
+				>
+					<UIcon name="i-heroicons-trash" class="w-4 h-4" />
+				</button>
 			</div>
 
 			<div v-if="file.duration" class="duration">
