@@ -5,8 +5,19 @@ use tauri::{
 	tray::TrayIconBuilder
 };
 
+pub mod commands;
+
 pub fn run() {
     tauri::Builder::default()
+		.invoke_handler(tauri::generate_handler![
+			crate::commands::media::get_media_files,
+			crate::commands::media::validate_media_file,
+			crate::commands::media::get_file_size,
+			crate::commands::media::create_temp_directory,
+			crate::commands::media::save_recording,
+			crate::commands::media::cleanup_temp_files,
+			crate::commands::media::get_file_metadata,
+		])
 		.setup(|app| {
 			let quit_i = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
 			let menu = Menu::with_items(app, &[&quit_i])?;

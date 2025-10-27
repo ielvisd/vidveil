@@ -166,11 +166,11 @@ graph TB
 **Description:** Build drag-and-drop file import with thumbnail generation.
 
 **Tasks:**
-- [ ] Create drag-and-drop interface using NuxtUI components (via vue-mcp)
-- [ ] Implement file picker for MP4/MOV/WebM
-- [ ] Generate video thumbnails using canvas
-- [ ] Create media library UI with grid view
-- [ ] Store file metadata in composable state
+- [x] Create drag-and-drop interface using NuxtUI components (via vue-mcp)
+- [x] Implement file picker for MP4/MOV/WebM
+- [x] Generate video thumbnails using canvas
+- [x] Create media library UI with grid view
+- [x] Store file metadata in composable state
 
 **Files to Create:**
 - `composables/useMedia.ts`
@@ -182,15 +182,15 @@ graph TB
 **Description:** Create Rust commands for file system and media handling.
 
 **Tasks:**
-- [ ] Create Rust commands for file system access
-- [ ] Implement media file validation
-- [ ] Add metadata extraction (duration, resolution, codec)
-- [ ] Create temp file management for recordings
-- [ ] Handle file path conversions using Tauri FS API
+- [x] Create Rust commands for file system access
+- [x] Implement media file validation
+- [x] Add metadata extraction (duration, resolution, codec)
+- [x] Create temp file management for recordings
+- [x] Handle file path conversions using Tauri FS API
 
 **Files to Create:**
 - `src-tauri/src/commands/media.rs`
-- [ ] Update `src-tauri/src/main.rs` to register commands
+- [x] Update `src-tauri/src/main.rs` to register commands
 
 ## Phase 4: Basic Video Preview & Playback
 
