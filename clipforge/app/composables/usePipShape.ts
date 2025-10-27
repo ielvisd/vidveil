@@ -18,6 +18,7 @@ const globalPipConfig = ref<PipShapeConfig | null>(null)
 
 export const usePipShape = () => {
 	const pipConfig = globalPipConfig
+	const webcamClipId = ref<string | null>(null)
 	const isActive = computed(() => pipConfig.value !== null)
 
 	const applyShape = (shape: PredefinedShape | 'rounded', clipId?: string) => {
@@ -33,7 +34,15 @@ export const usePipShape = () => {
 			shadow: true
 		}
 
-		console.log('Applied PiP shape:', shape, 'to clip:', clipId)
+		if (clipId) {
+			webcamClipId.value = clipId
+		}
+
+		console.log('Applied PiP shape:', shape, 'to webcam clip:', clipId)
+	}
+
+	const setWebcamClip = (clipId: string) => {
+		webcamClipId.value = clipId
 	}
 
 	const updatePosition = (x: number, y: number) => {
@@ -99,15 +108,23 @@ export const usePipShape = () => {
 		return ''
 	}
 
+	const removePip = () => {
+		globalPipConfig.value = null
+		webcamClipId.value = null
+	}
+
 	return {
 		pipConfig,
+		webcamClipId,
 		isActive,
 		applyShape,
+		setWebcamClip,
 		updatePosition,
 		updateSize,
 		updateBorder,
 		toggleShadow,
 		clearShape,
+		removePip,
 		getShapeCSS
 	}
 }

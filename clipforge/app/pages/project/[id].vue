@@ -138,25 +138,37 @@
 
 			<!-- Center: Video Preview -->
 			<div class="center-preview">
-				<div class="video-container">
+				<div class="video-container" ref="videoContainer">
 					<div v-if="!activeClip" class="empty-preview">
 						<i class="i-heroicons-film text-8xl text-gray-600" />
 						<h2>No Video Selected</h2>
 						<p>Import media or select a clip to preview</p>
 					</div>
-				<div v-else class="video-wrapper">
-					<video
-						ref="videoPlayer"
-						:src="activeClip.src"
-						class="preview-video"
-						:style="pipConfig ? getShapeCSS() : ''"
-						controls
-						@loadedmetadata="handleVideoLoaded"
-					/>
-					<div v-if="pipConfig" class="pip-indicator">
-						<span>PiP: {{ pipConfig.shape }}</span>
+					<div v-else class="video-wrapper">
+						<!-- Main Video (Screen Recording) -->
+						<video
+							ref="videoPlayer"
+							:src="activeClip.src"
+							class="preview-video"
+							controls
+							@loadedmetadata="handleVideoLoaded"
+						/>
+						
+						<!-- PiP Overlay (Webcam Feed) -->
+						<PipPipOverlay
+							v-if="webcamClip && pipConfig"
+							:webcam-clip="webcamClip"
+							:pip-config="pipConfig"
+							:container-width="containerWidth"
+							:container-height="containerHeight"
+							@remove="removePip"
+							@update-position="updatePipPosition"
+						/>
+
+						<div v-if="pipConfig" class="pip-indicator">
+							<span>PiP Active: {{ pipConfig.shape }}</span>
+						</div>
 					</div>
-				</div>
 				</div>
 
 				<!-- Playback Controls -->
@@ -328,17 +340,21 @@ const { clips, addClip, fetchClips, loading: clipsLoading } = useClips()
 const { exportVideo } = useExport()
 const { currentTime, duration, isPlaying, togglePlay, seek, formatTime, setPlayheadPosition, initializePlayer } = usePlayer()
 const { zoomLevel, zoomIn, zoomOut, setZoom } = useTimeline()
-const { pipConfig, applyShape: applyPipShape, getShapeCSS } = usePipShape()
+const { pipConfig, webcamClipId, applyShape: applyPipShape, updatePosition, removePip: removePipShape, setWebcamClip } = usePipShape()
 
 const selectedClip = ref<any>(null)
 const activeClip = ref<any>(null)
+const webcamClip = ref<any>(null)
 const project = ref<any>(null)
 const videoPlayer = ref<HTMLVideoElement | null>(null)
+const videoContainer = ref<HTMLDivElement | null>(null)
 const trackContainer = ref<HTMLDivElement | null>(null)
 const isMuted = ref(false)
 const volume = ref(100)
 const loading = ref(true)
 const error = ref<string | null>(null)
+const containerWidth = ref(0)
+const containerHeight = ref(0)
 
 const canExport = computed(() => clips.value.length > 0)
 const shapes = ['circle', 'square', 'heart', 'star', 'hexagon', 'rounded']
@@ -359,14 +375,48 @@ const handleVideoLoaded = () => {
 
 const selectClip = (clip: any) => {
 	selectedClip.value = clip
-	activeClip.value = clip
 	
-	// Wait for video element to update
-	nextTick(() => {
-		if (videoPlayer.value) {
-			initializePlayer(videoPlayer.value)
+	// Check if this is a webcam clip
+	const isWebcam = clip.metadata?.type === 'webcam' || clip.name?.toLowerCase().includes('webcam')
+	
+	if (isWebcam) {
+		// Set as webcam overlay
+		webcamClip.value = clip
+		setWebcamClip(clip.id)
+		
+		// If no PiP shape yet, apply default circle
+		if (!pipConfig.value) {
+			applyPipShape('circle', clip.id)
 		}
-	})
+	} else {
+		// Set as main video
+		activeClip.value = clip
+		
+		// Wait for video element to update
+		nextTick(() => {
+			if (videoPlayer.value) {
+				initializePlayer(videoPlayer.value)
+			}
+		})
+	}
+}
+
+// Update container dimensions on mount and resize
+const updateContainerSize = () => {
+	if (videoContainer.value) {
+		const rect = videoContainer.value.getBoundingClientRect()
+		containerWidth.value = rect.width
+		containerHeight.value = rect.height
+	}
+}
+
+const updatePipPosition = (x: number, y: number) => {
+	updatePosition(x, y)
+}
+
+const removePip = () => {
+	webcamClip.value = null
+	removePipShape()
 }
 
 const togglePlayback = () => {
@@ -452,6 +502,10 @@ onMounted(async () => {
 	// Add keyboard shortcuts
 	window.addEventListener('keydown', handleKeyPress)
 	
+	// Update container size
+	updateContainerSize()
+	window.addEventListener('resize', updateContainerSize)
+	
 	if (projectId) {
 		try {
 			loading.value = true
@@ -471,9 +525,24 @@ onMounted(async () => {
 				return
 			}
 			
-			// Auto-select first clip if available
-			if (clips.value.length > 0) {
-				selectClip(clips.value[0])
+			// Auto-select first non-webcam clip as main video
+			const screenClip = clips.value.find(c => c.metadata?.type !== 'webcam')
+			const webcam = clips.value.find(c => c.metadata?.type === 'webcam')
+			
+			if (screenClip) {
+				activeClip.value = screenClip
+				nextTick(() => {
+					if (videoPlayer.value) {
+						initializePlayer(videoPlayer.value)
+					}
+				})
+			}
+			
+			// Auto-setup webcam with PiP if available
+			if (webcam) {
+				webcamClip.value = webcam
+				setWebcamClip(webcam.id)
+				applyPipShape('circle', webcam.id)
 			}
 		} catch (err: any) {
 			error.value = err.message || 'Failed to load project'
@@ -485,6 +554,7 @@ onMounted(async () => {
 
 onUnmounted(() => {
 	window.removeEventListener('keydown', handleKeyPress)
+	window.removeEventListener('resize', updateContainerSize)
 })
 
 const formatDuration = (seconds: number | undefined): string => {
@@ -875,6 +945,11 @@ const handleExport = async () => {
 	position: relative;
 	max-width: 100%;
 	max-height: 100%;
+	width: 100%;
+	height: 100%;
+	display: flex;
+	align-items: center;
+	justify-content: center;
 }
 
 .preview-video {
@@ -884,7 +959,7 @@ const handleExport = async () => {
 	height: auto;
 	border-radius: 0.5rem;
 	box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.4);
-	transition: clip-path 0.3s ease;
+	display: block;
 }
 
 .pip-indicator {
