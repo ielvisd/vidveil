@@ -73,7 +73,7 @@
 					</div>
 				</UCard>
 
-				<UCard v-if="selectedClip" class="selected-clip-props">
+				<UCard v-if="selectedClip" class="selected-clip-props clip-props-animate">
 					<template #header>
 						<h3>Clip Properties</h3>
 					</template>
@@ -89,6 +89,17 @@
 						<div class="property">
 							<label>Track</label>
 							<p>Track {{ selectedClip.track || 1 }}</p>
+						</div>
+						<div class="property">
+							<UButton 
+								@click="removeClip"
+								color="red"
+								variant="soft"
+								size="xs"
+								icon="i-heroicons-trash"
+							>
+								Remove
+							</UButton>
 						</div>
 					</div>
 				</UCard>
@@ -485,6 +496,15 @@ const applyShape = (shape: string) => {
 	}
 }
 
+const removeClip = async () => {
+	if (!selectedClip.value) return
+	
+	const { deleteClip } = useClips()
+	await deleteClip(selectedClip.value.id)
+	selectedClip.value = null
+	activeClip.value = null
+}
+
 const handleExport = async () => {
 	if (!canExport.value) return
 	
@@ -584,15 +604,29 @@ const handleExport = async () => {
 	background-color: rgb(55 65 81);
 	border-radius: 0.375rem;
 	cursor: pointer;
-	transition: all 0.2s;
+	transition: all 0.2s ease;
+	animation: slideIn 0.2s ease;
 }
 
 .clip-item:hover {
 	background-color: rgb(75 85 99);
+	transform: translateX(4px);
 }
 
 .clip-item.active {
 	background-color: rgb(59 130 246);
+	box-shadow: 0 0 0 2px rgb(59 130 246 / 0.3);
+}
+
+@keyframes slideIn {
+	from {
+		opacity: 0;
+		transform: translateX(-10px);
+	}
+	to {
+		opacity: 1;
+		transform: translateX(0);
+	}
 }
 
 .clip-thumbnail {
@@ -628,6 +662,21 @@ const handleExport = async () => {
 
 .selected-clip-props {
 	margin-top: 0;
+}
+
+.clip-props-animate {
+	animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+	from {
+		opacity: 0;
+		transform: translateY(-10px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
 }
 
 .properties {
@@ -667,12 +716,37 @@ const handleExport = async () => {
 	color: white;
 	font-size: 0.75rem;
 	cursor: pointer;
-	transition: all 0.2s;
+	transition: all 0.2s ease;
+	position: relative;
+	overflow: hidden;
+}
+
+.shape-btn::before {
+	content: '';
+	position: absolute;
+	top: 50%;
+	left: 50%;
+	width: 0;
+	height: 0;
+	border-radius: 50%;
+	background-color: rgba(59, 130, 246, 0.3);
+	transform: translate(-50%, -50%);
+	transition: width 0.3s, height 0.3s;
+}
+
+.shape-btn:hover::before {
+	width: 100px;
+	height: 100px;
 }
 
 .shape-btn:hover {
 	background-color: rgb(75 85 99);
 	border-color: rgb(107 114 128);
+	transform: scale(1.05);
+}
+
+.shape-btn:active {
+	transform: scale(0.95);
 }
 
 /* Center Preview */
@@ -914,18 +988,41 @@ const handleExport = async () => {
 	display: flex;
 	align-items: center;
 	padding: 0 0.75rem;
-	transition: all 0.2s;
+	transition: all 0.2s ease;
 	border: 2px solid transparent;
+	animation: clipAppear 0.3s ease;
+}
+
+@keyframes clipAppear {
+	from {
+		opacity: 0;
+		transform: scale(0.9);
+	}
+	to {
+		opacity: 1;
+		transform: scale(1);
+	}
 }
 
 .timeline-clip:hover {
 	border-color: rgb(147 197 253);
 	transform: translateY(-2px);
+	box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
 }
 
 .timeline-clip.selected {
 	border-color: rgb(253 224 71);
-	box-shadow: 0 0 0 2px rgb(253 224 71 / 0.3);
+	box-shadow: 0 0 0 2px rgb(253 224 71 / 0.3), 0 4px 12px rgba(0, 0, 0, 0.3);
+	animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+	0%, 100% {
+		box-shadow: 0 0 0 2px rgb(253 224 71 / 0.3), 0 4px 12px rgba(0, 0, 0, 0.3);
+	}
+	50% {
+		box-shadow: 0 0 0 4px rgb(253 224 71 / 0.5), 0 4px 12px rgba(0, 0, 0, 0.3);
+	}
 }
 
 .clip-label {
