@@ -89,7 +89,17 @@
 
 				<UCard v-if="selectedClip" class="selected-clip-props clip-props-animate">
 					<template #header>
-						<h3>Clip Properties</h3>
+						<div class="clip-header">
+							<h3>Clip Properties</h3>
+							<UButton 
+								@click="removeClip"
+								color="red"
+								variant="ghost"
+								size="xs"
+								icon="i-heroicons-trash"
+								title="Remove Clip"
+							/>
+						</div>
 					</template>
 					<div class="properties">
 						<div class="property">
@@ -109,17 +119,6 @@
 						<div class="property">
 							<label>Track</label>
 							<p>Track {{ selectedClip.track || 1 }}</p>
-						</div>
-						<div class="property">
-							<UButton 
-								@click="removeClip"
-								color="red"
-								variant="soft"
-								size="xs"
-								icon="i-heroicons-trash"
-							>
-								Remove
-							</UButton>
 						</div>
 					</div>
 				</UCard>
