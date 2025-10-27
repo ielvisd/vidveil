@@ -864,6 +864,26 @@ const handleExport = () => {
 	font-size: 0.875rem;
 }
 
+.storage-badge {
+	display: inline-block;
+	padding: 0.25rem 0.5rem;
+	border-radius: 0.25rem;
+	font-size: 0.75rem;
+	font-weight: 500;
+}
+
+.storage-badge.local {
+	background-color: rgba(251, 191, 36, 0.2);
+	color: rgb(251, 191, 36);
+	border: 1px solid rgba(251, 191, 36, 0.3);
+}
+
+.storage-badge.cloud {
+	background-color: rgba(59, 130, 246, 0.2);
+	color: rgb(59, 130, 246);
+	border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
 .pip-shapes {
 	margin-top: 0;
 }
