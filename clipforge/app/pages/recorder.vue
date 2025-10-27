@@ -22,35 +22,73 @@
 				<div v-if="!isRecording && !recordedScreenBlob" class="start-prompt">
 					<i class="i-heroicons-video-camera text-8xl text-gray-600" />
 					<h2>Ready to Record</h2>
-					<p>Click the record button below to start capturing your screen</p>
+					<p>Click the record button below to start capturing</p>
+					<p class="text-sm text-gray-500 mt-2">Screen + {{ includeWebcam ? 'Webcam' : 'No Webcam' }}</p>
 				</div>
 				
-				<video
-					v-else
-					ref="previewVideo"
-					:srcObject="stream"
-					autoplay
-					muted
-					class="preview-video"
-				/>
+				<!-- Currently Recording -->
+				<div v-else-if="isRecording" class="recording-active">
+					<div class="preview-grid">
+						<!-- Screen Preview -->
+						<div class="preview-main">
+							<video
+								ref="screenPreview"
+								:srcObject="screenStream"
+								autoplay
+								muted
+								class="preview-video"
+							/>
+							<div class="preview-label">Screen</div>
+						</div>
 
-				<div v-if="recordedBlob" class="playback-area">
-					<h3>Recording Complete</h3>
-					<video :src="blobUrl" controls class="playback-video" />
+						<!-- Webcam Preview -->
+						<div v-if="webcamStream" class="preview-webcam">
+							<video
+								ref="webcamPreview"
+								:srcObject="webcamStream"
+								autoplay
+								muted
+								class="preview-video webcam"
+							/>
+							<div class="preview-label">Webcam</div>
+						</div>
+					</div>
+
+					<div class="recording-indicator">
+						<div class="recording-dot"></div>
+						<span>Recording...</span>
+						<span class="recording-time">{{ recordingTime }}</span>
+					</div>
+				</div>
+
+				<!-- Recording Complete -->
+				<div v-else-if="recordedScreenBlob" class="playback-area">
+					<h3>Recording Complete!</h3>
+					<div class="playback-grid">
+						<div class="playback-item">
+							<h4>Screen Recording</h4>
+							<video :src="screenBlobUrl" controls class="playback-video" />
+						</div>
+						<div v-if="recordedWebcamBlob" class="playback-item">
+							<h4>Webcam Recording</h4>
+							<video :src="webcamBlobUrl" controls class="playback-video" />
+						</div>
+					</div>
 					<div class="recording-actions">
 						<UButton 
-							@click="saveRecording"
+							@click="saveRecordings"
 							color="primary"
 							icon="i-heroicons-check"
+							size="lg"
 						>
 							Add to Project
 						</UButton>
 						<UButton 
-							@click="discardRecording"
+							@click="discardRecordings"
 							variant="outline"
 							icon="i-heroicons-trash"
 						>
-							Discard
+							Discard & Re-record
 						</UButton>
 					</div>
 				</div>
