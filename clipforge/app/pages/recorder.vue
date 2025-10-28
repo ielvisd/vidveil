@@ -60,16 +60,29 @@
 				<!-- Recording Complete -->
 				<div v-else-if="recordedScreenBlob" class="playback-area">
 					<h3>Recording Complete!</h3>
-					<div class="playback-grid">
-						<div class="playback-item">
-							<h4>Screen Recording</h4>
-							<video :src="screenBlobUrl" controls class="playback-video" />
-						</div>
-						<div v-if="recordedWebcamBlob" class="playback-item">
-							<h4>Webcam Recording</h4>
-							<video :src="webcamBlobUrl" controls class="playback-video" />
+					<p class="preview-note">Preview how your PiP video will look in the editor</p>
+					
+					<!-- Preview with PiP Layout -->
+					<div class="preview-pip-container playback-preview">
+						<!-- Screen Video (Main) -->
+						<video 
+							:src="screenBlobUrl" 
+							controls 
+							class="preview-video-main"
+							@loadedmetadata="handlePlaybackLoaded"
+						/>
+						
+						<!-- Webcam Video (PiP Overlay) -->
+						<div v-if="recordedWebcamBlob" class="preview-pip-overlay">
+							<video 
+								:src="webcamBlobUrl" 
+								ref="webcamPlayback"
+								class="preview-video-pip"
+								muted
+							/>
 						</div>
 					</div>
+
 					<div class="recording-actions">
 						<UButton 
 							@click="saveRecordings"
@@ -176,6 +189,7 @@ const { addClip } = useClips()
 
 const screenPreview = ref<HTMLVideoElement | null>(null)
 const webcamPreview = ref<HTMLVideoElement | null>(null)
+const webcamPlayback = ref<HTMLVideoElement | null>(null)
 const recordingTime = ref('00:00')
 const recordingInterval = ref<NodeJS.Timeout | null>(null)
 const recordingStartTime = ref<number>(0)
@@ -272,6 +286,27 @@ const saveRecordings = async () => {
 		console.error('Failed to save recordings:', error)
 	} finally {
 		saving.value = false
+	}
+}
+
+const handlePlaybackLoaded = (event: Event) => {
+	// Sync webcam playback with screen playback
+	const screenVideo = event.target as HTMLVideoElement
+	
+	if (webcamPlayback.value && screenVideo) {
+		screenVideo.addEventListener('play', () => {
+			webcamPlayback.value?.play()
+		})
+		
+		screenVideo.addEventListener('pause', () => {
+			webcamPlayback.value?.pause()
+		})
+		
+		screenVideo.addEventListener('seeked', () => {
+			if (webcamPlayback.value) {
+				webcamPlayback.value.currentTime = screenVideo.currentTime
+			}
+		})
 	}
 }
 
