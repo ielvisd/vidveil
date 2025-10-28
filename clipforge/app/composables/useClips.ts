@@ -149,7 +149,12 @@ export const useClips = () => {
 			// Check if clip is stored in IndexedDB
 			const clip = clips.value.find(c => c.id === clipId)
 			if (clip?.metadata?.storageType === 'local') {
-				await deleteVideoFromIndexedDB(clipId)
+				try {
+					await deleteVideoFromIndexedDB(clipId)
+					console.log(`🗑️ Deleted clip ${clipId} from IndexedDB`)
+				} catch (err) {
+					console.warn(`Failed to delete from IndexedDB:`, err)
+				}
 			}
 
 			const { error } = await supabase
@@ -213,21 +218,31 @@ export const useClips = () => {
 				(data || []).map(async (clip) => {
 					if (clip.src.startsWith('indexeddb://')) {
 						const id = clip.src.replace('indexeddb://', '')
-						const blob = await getVideoFromIndexedDB(id)
-						if (blob) {
-							return {
-								...clip,
-								src: createBlobURL(blob)
+						try {
+							const blob = await getVideoFromIndexedDB(id)
+							if (blob) {
+								return {
+									...clip,
+									src: createBlobURL(blob)
+								}
+							} else {
+								// Clip in DB but not in IndexedDB - clean it up
+								console.warn(`⚠️ Clip ${clip.id} not found in IndexedDB, skipping`)
+								return null
 							}
+						} catch (err) {
+							console.error(`Failed to load clip ${clip.id} from IndexedDB:`, err)
+							return null
 						}
 					}
 					return clip
 				})
 			)
 
-			clips.value = clipsWithUrls
+			// Filter out null clips (missing from IndexedDB)
+			clips.value = clipsWithUrls.filter(c => c !== null) as any[]
 
-			return { clips: clipsWithUrls, error: null }
+			return { clips: clips.value, error: null }
 		} catch (error: any) {
 			return { clips: [], error: error.message }
 		} finally {

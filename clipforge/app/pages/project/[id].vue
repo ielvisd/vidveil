@@ -533,11 +533,15 @@ onMounted(async () => {
 
 			project.value = result.project
 			
+			console.log('📥 Loading clips for project:', projectId)
 			const clipsResult = await fetchClips(projectId)
+			
 			if (clipsResult.error) {
 				error.value = clipsResult.error
 				return
 			}
+			
+			console.log('✅ Loaded', clips.value.length, 'clip(s)')
 			
 			// Auto-select first non-webcam clip as main video
 			const screenClip = clips.value.find(c => c.metadata?.type !== 'webcam')
@@ -545,6 +549,7 @@ onMounted(async () => {
 			
 			if (screenClip) {
 				activeClip.value = screenClip
+				console.log('🎬 Active clip:', screenClip.name)
 				nextTick(() => {
 					if (videoPlayer.value) {
 						initializePlayer(videoPlayer.value)
@@ -557,8 +562,10 @@ onMounted(async () => {
 				webcamClip.value = webcam
 				setWebcamClip(webcam.id)
 				applyPipShape('circle', webcam.id)
+				console.log('📷 Webcam PiP setup:', webcam.name)
 			}
 		} catch (err: any) {
+			console.error('❌ Failed to load project:', err)
 			error.value = err.message || 'Failed to load project'
 		} finally {
 			loading.value = false
