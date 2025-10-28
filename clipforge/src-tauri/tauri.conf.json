@@ -14,13 +14,20 @@
 			"icons/icon.icns",
 			"icons/icon.ico"
 		],
-		"resources": [],
+		"resources": ["Info.plist"],
 		"externalBin": [],
 		"copyright": "Copyright © 2025 Elvis Ibarra",
 		"category": "Video",
 		"shortDescription": "AI-Powered Video Editor with PiP Magic",
 		"longDescription": "VidVeil is a desktop video editor that lets you record screen and webcam with custom PiP shapes",
-		"macOS": {},
+		"macOS": {
+			"entitlements": "entitlements.plist",
+			"exceptionDomain": null,
+			"frameworks": [],
+			"providerShortName": null,
+			"signingIdentity": null
+		},
+		"iOS": {},
 		"linux": {
 			"deb": {}
 		}
@@ -38,6 +45,7 @@
 	"app": {
 		"windows": [
 			{
+				"label": "main",
 				"title": "VidVeil - AI Video Editor",
 				"width": 1600,
 				"height": 1000,
@@ -49,6 +57,7 @@
 		],
 		"security": {
 			"csp": null
-		}
+		},
+		"withGlobalTauri": true
 	}
 }

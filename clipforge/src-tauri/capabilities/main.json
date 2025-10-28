@@ -1,12 +1,12 @@
 {
 	"$schema": "../gen/schemas/desktop-schema.json",
 	"identifier": "main",
-	"description": "Capabilities for the app window",
+	"description": "Capabilities for the VidVeil app",
 	"windows": [
-		"main",
-		"secondary"
+		"main"
 	],
 	"permissions": [
+		"core:default",
 		"core:path:default",
 		"core:event:default",
 		"core:window:default",
@@ -14,36 +14,11 @@
 		"core:resources:default",
 		"core:menu:default",
 		"core:tray:default",
-		"shell:allow-open",
-		{
-			"identifier": "shell:allow-execute",
-			"allow": [
-				{
-					"name": "exec-sh",
-					"cmd": "sh",
-					"args": [
-						"-c",
-						{
-							"validator": "\\S+"
-						}
-					],
-					"sidecar": false
-				}
-			]
-		},
+		"core:webview:default",
+		"shell:default",
 		"notification:default",
-		"os:allow-platform",
-		"os:allow-arch",
-		"os:allow-family",
-		"os:allow-version",
-		"os:allow-locale",
-		"fs:allow-document-read",
-		"fs:allow-document-write",
-		"fs:allow-read-all",
-		"fs:allow-write-all",
-		"fs:allow-search",
-		"store:default",
-		"core:webview:allow-create-webview",
-		"core:webview:allow-create-webview-window"
+		"os:default",
+		"fs:default",
+		"store:default"
 	]
 }

@@ -12,10 +12,9 @@ pub fn save_screen_recording(
 	fs::write(&output_path, content)
 		.map_err(|e| format!("Failed to save recording: {}", e))?;
 	
-	output_path.to_str()
+	Ok(output_path.to_str()
 		.ok_or("Failed to convert path to string")?
-		.to_string()
-		.into()
+		.to_string())
 }
 
 #[command]

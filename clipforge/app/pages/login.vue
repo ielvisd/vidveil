@@ -1,7 +1,7 @@
 <template>
 	<div class="login-page">
 		<div class="login-container">
-			<h1 class="title">VidVeil</h1>
+			<h1 class="title">ClipForge</h1>
 			<p class="subtitle">Sign in to start editing</p>
 
 			<AuthLoginForm />

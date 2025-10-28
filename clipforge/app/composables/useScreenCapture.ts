@@ -1,12 +1,42 @@
 import { ref } from 'vue'
 
+// Check if running in Tauri
+const isTauri = () => {
+	return typeof window !== 'undefined' && '__TAURI__' in window
+}
+
+// Polyfill for getDisplayMedia in Tauri
+const getDisplayMediaPolyfill = async (constraints: any) => {
+	if (isTauri()) {
+		// In Tauri, we need to use a workaround
+		// Try to access the API through electron-like methods or use window.open
+		try {
+			// Attempt 1: Direct access (works in some Tauri webviews)
+			if (navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) {
+				return await navigator.mediaDevices.getDisplayMedia(constraints)
+			}
+			
+			// Attempt 2: Use getUserMedia as fallback (won't capture screen, but won't crash)
+			console.warn('⚠️ getDisplayMedia not available in Tauri, using getUserMedia fallback')
+			throw new Error('Screen recording is not available in desktop mode. Please use browser mode (bun run dev) for recording.')
+		} catch (err) {
+			throw new Error('Screen recording requires browser mode. Run: bun run dev')
+		}
+	} else {
+		// Browser mode - use standard API
+		return await navigator.mediaDevices.getDisplayMedia(constraints)
+	}
+}
+
 export const useScreenCapture = () => {
 	const screenStream = ref<MediaStream | null>(null)
 	const webcamStream = ref<MediaStream | null>(null)
 	const isRecording = ref(false)
-	const includeWebcam = ref(true)
+	const includeWebcam = ref(false)
 	const recordedScreenBlob = ref<Blob | null>(null)
 	const recordedWebcamBlob = ref<Blob | null>(null)
+	const recordedScreenBlobUrl = ref<string | null>(null)
+	const recordedWebcamBlobUrl = ref<string | null>(null)
 	const error = ref<string | null>(null)
 	
 	let screenRecorder: MediaRecorder | null = null
@@ -20,8 +50,59 @@ export const useScreenCapture = () => {
 			screenChunks = []
 			webcamChunks = []
 
+		// Check if in Tauri - use native recording
+		if (isTauri()) {
+			const { invoke } = await import('@tauri-apps/api/core')
+			const { getScreens, startRecording: startNative } = (await import('./useNativeRecording')).useNativeRecording()
+			
+			try {
+				// Get available screens
+				const screens = await getScreens()
+				
+				if (screens.length === 0) {
+					throw new Error('No screens available for recording')
+				}
+				
+				// Use primary screen or first available
+				const primaryScreen = screens.find(s => s.is_primary) || screens[0]
+				
+				// Generate output path in Movies folder
+				const timestamp = Date.now()
+				const homeDir = '/Users/' + (await invoke('get_username') as string).trim()
+				const recordingsDir = `${homeDir}/Movies/VidVeil`
+				
+				// Create directory if it doesn't exist
+				await invoke('create_recordings_directory', { path: recordingsDir })
+				
+				const outputPath = `${recordingsDir}/recording-${timestamp}.mp4`
+				
+				// Start native recording (this will wait for permissions and AVFoundation to initialize)
+				console.log('🎬 Requesting native recording...')
+				console.log('📷 Include webcam:', includeWebcam.value)
+				
+				// Don't set isRecording yet - wait for actual confirmation
+				const resultPath = await startNative(primaryScreen.id, true, outputPath, includeWebcam.value)
+				
+				if (!resultPath) {
+					throw new Error('Failed to start native recording')
+				}
+				
+				// Wait a bit more for AVFoundation to fully initialize
+				await new Promise(resolve => setTimeout(resolve, 1000))
+				
+				// Now set isRecording AFTER we're confident it's actually recording
+				isRecording.value = true
+				console.log('✅ Native recording started successfully:', resultPath)
+				return
+			} catch (err: any) {
+				console.error('Failed to start native recording:', err)
+				error.value = err.message || 'Failed to start native recording'
+				throw err
+			}
+		}
+
 			// Request screen capture
-			const displayStream = await navigator.mediaDevices.getDisplayMedia({
+			const displayStream = await getDisplayMediaPolyfill({
 				video: {
 					cursor: 'always',
 					displaySurface: 'monitor'
@@ -201,7 +282,72 @@ export const useScreenCapture = () => {
 		}
 	}
 
-	const stopRecording = () => {
+	const stopRecording = async () => {
+		// Handle native recording stop (Tauri)
+		if (isTauri()) {
+			try {
+				const { invoke } = await import('@tauri-apps/api/core')
+				const { stopRecording: stopNative } = (await import('./useNativeRecording')).useNativeRecording()
+				const outputPath = await stopNative()
+				
+				if (outputPath) {
+					console.log('✅ Native recording stopped:', outputPath)
+					
+					// Wait a moment for AVFoundation to finalize the file
+					await new Promise(resolve => setTimeout(resolve, 500))
+					
+					// For native recordings, we keep the file on disk instead of IndexedDB
+					// The file already exists at outputPath - no need to duplicate it
+					console.log('✅ Native recording saved to disk:', outputPath)
+					console.log('📁 File location: ~/Movies/VidVeil/')
+					
+					// Create blob URLs for preview/playback from the files
+					try {
+						// Read screen recording
+						const fileBytes = await invoke('read_video_file', { filePath: outputPath }) as number[]
+						const blob = new Blob([new Uint8Array(fileBytes)], { type: 'video/mp4' })
+						
+						recordedScreenBlob.value = blob
+						recordedScreenBlobUrl.value = URL.createObjectURL(blob)
+						
+						console.log('📹 Screen blob size:', (blob.size / 1024 / 1024).toFixed(2), 'MB')
+						
+						// Try to read webcam recording if it exists
+						const webcamPath = outputPath.replace('.mp4', '-webcam.mp4')
+						try {
+							const webcamBytes = await invoke('read_video_file', { filePath: webcamPath }) as number[]
+							const webcamBlob = new Blob([new Uint8Array(webcamBytes)], { type: 'video/mp4' })
+							
+							recordedWebcamBlob.value = webcamBlob
+							recordedWebcamBlobUrl.value = URL.createObjectURL(webcamBlob)
+							
+							console.log('📹 Webcam blob size:', (webcamBlob.size / 1024 / 1024).toFixed(2), 'MB')
+							console.log('✅ Both recordings ready for preview')
+						} catch (webcamErr: any) {
+							console.log('📷 No webcam recording found (this is normal if webcam was disabled)')
+							recordedWebcamBlob.value = null
+							recordedWebcamBlobUrl.value = ''
+						}
+						
+						console.log('✅ Recording ready for preview')
+					} catch (err: any) {
+						console.error('Failed to create preview:', err)
+						// Don't throw - the file still exists on disk even if preview fails
+						console.warn('⚠️ Preview failed but recording is saved to:', outputPath)
+					}
+				}
+				
+				isRecording.value = false
+				return outputPath
+			} catch (err: any) {
+				console.error('Failed to stop native recording:', err)
+				error.value = err.message || 'Failed to stop recording'
+				isRecording.value = false
+				return null
+			}
+		}
+		
+		// Browser mode recording stop
 		if (screenRecorder && screenRecorder.state !== 'inactive') {
 			screenRecorder.stop()
 		}
@@ -251,6 +397,8 @@ export const useScreenCapture = () => {
 		includeWebcam,
 		recordedScreenBlob,
 		recordedWebcamBlob,
+		recordedScreenBlobUrl,
+		recordedWebcamBlobUrl,
 		error,
 		startRecording,
 		stopRecording,

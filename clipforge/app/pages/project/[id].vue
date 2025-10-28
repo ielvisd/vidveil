@@ -346,7 +346,8 @@
 
 <script setup lang="ts">
 const route = useRoute()
-const projectId = route.params.id as string
+const routeParamId = 'id' in route.params ? route.params.id : ''
+const projectId = (typeof routeParamId === 'string' ? routeParamId : Array.isArray(routeParamId) ? routeParamId[0] : '') as string
 
 const { currentProject, selectProject } = useProject()
 const { clips, addClip, fetchClips, loading: clipsLoading } = useClips()
@@ -513,6 +514,65 @@ const handleKeyPress = (event: KeyboardEvent) => {
 }
 
 onMounted(async () => {
+	// Listen for recordings from recorder window (Tauri multi-window)
+	if (typeof window !== 'undefined' && '__TAURI__' in window) {
+		const { listenForRecordings, base64ToBlob } = useRecorderBridge()
+		listenForRecordings(async (data: any) => {
+			console.log('📥 Received recording from recorder window:', data)
+			try {
+				// Convert base64 back to blobs
+				const screenBlob = base64ToBlob(data.screenData, 'video/webm')
+				const webcamBlob = data.webcamData ? base64ToBlob(data.webcamData, 'video/webm') : null
+				
+				// Create object URLs
+				const screenSrc = URL.createObjectURL(screenBlob)
+				
+				// Get video duration
+				const getVideoDuration = (blob: Blob): Promise<number> => {
+					return new Promise((resolve) => {
+						const video = document.createElement('video')
+						video.src = URL.createObjectURL(blob)
+						video.onloadedmetadata = () => {
+							resolve(video.duration)
+							URL.revokeObjectURL(video.src)
+						}
+					})
+				}
+				
+				const screenDuration = await getVideoDuration(screenBlob)
+				
+				// Add screen recording to project
+				await addClip(data.projectId, screenSrc, {
+					name: 'Screen Recording',
+					duration: screenDuration,
+					type: 'screen',
+					fileSize: data.screenSize
+				})
+				
+				// Add webcam recording if available
+				if (webcamBlob) {
+					const webcamSrc = URL.createObjectURL(webcamBlob)
+					const webcamDuration = await getVideoDuration(webcamBlob)
+					
+					await addClip(data.projectId, webcamSrc, {
+						name: 'Webcam',
+						duration: webcamDuration,
+						type: 'webcam',
+						fileSize: data.webcamSize
+					})
+				}
+				
+				// Refresh clips to show new recordings
+				await fetchClips(data.projectId)
+				
+				console.log('✅ Recordings added to project successfully')
+			} catch (err) {
+				console.error('❌ Failed to process recordings:', err)
+				error.value = 'Failed to import recordings from recorder window'
+			}
+		})
+	}
+	
 	// Add keyboard shortcuts
 	window.addEventListener('keydown', handleKeyPress)
 	

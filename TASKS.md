@@ -1,4 +1,4 @@
-# ClipForge Implementation Tasks
+# VidVeil Implementation Tasks
 
 Each task represents a PR that will be created during development.
 
@@ -67,7 +67,7 @@ graph TB
 ## Phase 1: Foundation & MCP Setup
 
 ### PR-1: Project Initialization
-**Description:** Initialize ClipForge from Nuxtor template with TypeScript, ESLint, Tailwind, and create `.cursorrules` emphasizing MCP usage.
+**Description:** Initialize VidVeil from Nuxtor template with TypeScript, ESLint, Tailwind, and create `.cursorrules` emphasizing MCP usage.
 
 **Tasks:**
 - [ ] Run `npx degit NicolaSpadari/nuxtor clipforge`
@@ -80,7 +80,7 @@ graph TB
 
 **Files to Create:**
 - `.cursorrules`
-- `package.json` (update with ClipForge name)
+- `package.json` (update with VidVeil name)
 - `tsconfig.json` (verify config)
 - `tailwind.config.js` (verify config)
 

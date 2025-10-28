@@ -23,32 +23,45 @@
 					<i class="i-heroicons-video-camera text-8xl text-gray-600" />
 					<h2>Ready to Record</h2>
 					<p>Click the record button below to start capturing</p>
-					<p class="text-sm text-gray-500 mt-2">Screen + {{ includeWebcam ? 'Webcam' : 'No Webcam' }}</p>
+					<!-- <p class="text-sm text-gray-500 mt-2">Screen + {{ includeWebcam ? 'Webcam' : 'No Webcam' }}</p> -->
 				</div>
 				
-				<!-- Currently Recording -->
-				<div v-else-if="isRecording" class="recording-active">
-					<div class="preview-pip-container">
-						<!-- Screen Preview (Main) -->
+			<!-- Currently Recording -->
+			<div v-else-if="isRecording" class="recording-active">
+				<!-- Native Recording Mode (no live preview) -->
+				<div v-if="!screenStream" class="native-recording-indicator">
+					<div class="pulse-indicator">
+						<div class="pulse-ring"></div>
+						<i class="i-heroicons-video-camera text-8xl text-red-500" />
+					</div>
+					<h2 class="text-white">🔴 Recording Screen</h2>
+					<p class="text-gray-300">Native desktop recording in progress</p>
+					<p class="text-sm text-gray-400 mt-4">{{ recordingTime }}</p>
+					<p class="text-xs text-gray-500 mt-2">Preview will be available after stopping</p>
+				</div>
+				
+				<!-- Browser Mode Recording (with live preview) -->
+				<div v-else class="preview-pip-container">
+					<!-- Screen Preview (Main) -->
+					<video
+						ref="screenPreview"
+						:srcObject="screenStream"
+						autoplay
+						muted
+						class="preview-video-main"
+					/>
+					
+					<!-- Webcam Preview (PiP Overlay) -->
+					<div v-if="webcamStream" class="preview-pip-overlay">
 						<video
-							ref="screenPreview"
-							:srcObject="screenStream"
+							ref="webcamPreview"
+							:srcObject="webcamStream"
 							autoplay
 							muted
-							class="preview-video-main"
+							class="preview-video-pip"
 						/>
-						
-						<!-- Webcam Preview (PiP Overlay) -->
-						<div v-if="webcamStream" class="preview-pip-overlay">
-							<video
-								ref="webcamPreview"
-								:srcObject="webcamStream"
-								autoplay
-								muted
-								class="preview-video-pip"
-							/>
-						</div>
 					</div>
+				</div>
 
 					<div class="recording-indicator">
 						<div class="recording-dot"></div>
@@ -149,15 +162,14 @@
 					<div class="option-list">
 						<div class="option-item">
 							<label class="toggle-label">
-								<input 
-									type="checkbox" 
-									v-model="includeWebcam"
-									:disabled="isRecording"
-									class="toggle-checkbox"
-								/>
-								<span>Include Webcam</span>
-							</label>
-							<p class="option-help">Captures your webcam alongside screen for PiP overlay</p>
+							<input 
+								type="checkbox" 
+								v-model="includeWebcam"
+								class="toggle-checkbox"
+							/>
+							<span>Include Webcam</span>
+						</label>
+						<p class="option-help">Record webcam as separate PiP overlay</p>
 						</div>
 						<div class="option-item">
 							<label>Audio Source</label>
@@ -290,14 +302,11 @@ const saveRecordings = async () => {
 	}
 
 	saving.value = true
+	
+	// Native recording in Tauri - add directly to project (no separate window)
 	try {
-		// Save screen recording
-		const screenFile = new File(
-			[recordedScreenBlob.value], 
-			`screen-${Date.now()}.webm`, 
-			{ type: 'video/webm' }
-		)
-		const screenSrc = URL.createObjectURL(screenFile)
+		// Save screen recording - pass Blob directly to avoid URL revocation issues
+		const screenSrc = URL.createObjectURL(recordedScreenBlob.value)
 		const screenDuration = await getVideoDuration(recordedScreenBlob.value)
 
 		console.log('📥 Adding screen recording to project...')
@@ -305,17 +314,13 @@ const saveRecordings = async () => {
 			name: 'Screen Recording',
 			duration: screenDuration,
 			type: 'screen',
-			fileSize: recordedScreenBlob.value.size
+			fileSize: recordedScreenBlob.value.size,
+			format: 'video/mp4' // Native recording produces MP4, not WebM
 		})
 
 		// Save webcam recording if available
 		if (recordedWebcamBlob.value) {
-			const webcamFile = new File(
-				[recordedWebcamBlob.value],
-				`webcam-${Date.now()}.webm`,
-				{ type: 'video/webm' }
-			)
-			const webcamSrc = URL.createObjectURL(webcamFile)
+			const webcamSrc = URL.createObjectURL(recordedWebcamBlob.value)
 			const webcamDuration = await getVideoDuration(recordedWebcamBlob.value)
 
 			console.log('📥 Adding webcam recording to project...')
@@ -323,7 +328,8 @@ const saveRecordings = async () => {
 				name: 'Webcam',
 				duration: webcamDuration,
 				type: 'webcam',
-				fileSize: recordedWebcamBlob.value.size
+				fileSize: recordedWebcamBlob.value.size,
+				format: 'video/mp4' // Native recording produces MP4, not WebM
 			})
 		}
 
@@ -531,6 +537,47 @@ onUnmounted(() => {
 	justify-content: center;
 	gap: 2rem;
 	padding: 2rem;
+}
+
+.native-recording-indicator {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 1rem;
+	text-align: center;
+}
+
+.pulse-indicator {
+	position: relative;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	margin-bottom: 1rem;
+}
+
+.pulse-ring {
+	position: absolute;
+	width: 150px;
+	height: 150px;
+	border-radius: 50%;
+	background-color: rgba(239, 68, 68, 0.2);
+	animation: pulse 2s ease-out infinite;
+}
+
+@keyframes pulse {
+	0% {
+		transform: scale(0.8);
+		opacity: 1;
+	}
+	50% {
+		transform: scale(1.1);
+		opacity: 0.5;
+	}
+	100% {
+		transform: scale(1.3);
+		opacity: 0;
+	}
 }
 
 .preview-pip-container {

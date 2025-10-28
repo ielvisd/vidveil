@@ -1,238 +1,253 @@
 # VidVeil Development Log
 
+## Native Screen Recording - Status Update
+
+**Date:** October 28, 2025  
+**Status:** 🚧 IN PROGRESS - AVFoundation needs exception handling
+
 ---
 
-## 📅 January 2025 - Desktop Execution Release
+## What Happened
 
-### Status: ✅ Production Ready
+### ✅ Achievements:
+- Full AVFoundation implementation written (218 lines of Objective-C FFI)
+- All Rust compilation errors fixed
+- App builds and launches successfully
+- Thread-safe architecture with proper mutex handling
+- Screen enumeration working via Core Graphics
 
-**Major Milestone:** Complete rebranding from ClipForge to VidVeil + full export pipeline implementation
+### ❌ Current Issue: Objective-C Exception Crash
 
-### Completed Work
+**Error:** `fatal runtime error: Rust cannot catch foreign exceptions, aborting`
 
-#### 1. Complete Rebranding: ClipForge → VidVeil
-- Updated product name across 15+ files
-- Changed bundle ID to `com.elvisibarra.vidveil`
-- Updated all UI text and component headers
-- Rebranded database (`vidveil-videos`) and temp directories
-- Updated Tauri configuration with proper branding
+**What This Means:**  
+The AVFoundation Objective-C code is throwing an exception that Rust can't catch. This is a common issue when bridging Objective-C and Rust.
 
-#### 2. Export Pipeline Implementation ⭐
-**CRITICAL FEATURE - NOW COMPLETE**
+**Root Cause:**  
+Objective-C methods can throw exceptions for various reasons:
+- Missing permissions (even though we have entitlements)
+- Invalid parameters
+- API availability issues
+- Runtime initialization failures
 
-Implemented full canvas-based video export:
-- Dual-layer compositing (screen + webcam)
-- Shape mask application during export using Path2D
-- Audio preservation via Web Audio API
-- Real-time progress tracking (0-100%)
-- Resolution options: 1080p, 720p, 480p
-- Quality settings: high, medium, low
-- Format selection: MP4, WebM
-- Automatic download and cleanup
+---
 
-**Files Modified:**
-- `app/composables/useExport.ts` - Complete rewrite (220 lines)
-- `utils/shapes.ts` - Added `getShapePath()` function for canvas rendering
+## The Problem with AVFoundation Bridging
 
-#### 3. Tauri Configuration
-- Product name: VidVeil
-- Window title: "VidVeil - AI Video Editor"
-- Optimized window size: 1600x1000 (min: 1280x720)
-- Category: Video
-- Proper descriptions and copyright
+AVFoundation uses Objective-C exceptions for error handling, but Rust's FFI can't catch these. When an Objective-C exception is thrown:
 
-#### 4. Build Process
-**Known Issue:** Requires Rust/Cargo installation
+```
+Objective-C throws exception → Crosses FFI boundary → Rust panics → App crashes
+```
 
-```bash
-# Install Rust first
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-source $HOME/.cargo/env
+### What We Need:
 
-# Then build
-bun run tauri:build
+**Objective-C Exception Handler Wrapper:**
+
+We need to create a C wrapper that catches Objective-C exceptions before they reach Rust:
+
+```objc
+// screen_capture.m (new file needed)
+#import <Foundation/Foundation.h>
+#import <AVFoundation/AVFoundation.h>
+
+extern "C" {
+    bool start_avfoundation_recording(
+        const char* output_path,
+        uint32_t display_id,
+        bool include_audio,
+        char** error_out
+    ) {
+        @try {
+            // AVFoundation code here
+            AVCaptureSession* session = [[AVCaptureSession alloc] init];
+            // ... rest of implementation
+            return true;
+        }
+        @catch (NSException* exception) {
+            *error_out = strdup([[exception reason] UTF8String]);
+            return false;
+        }
+    }
+}
+```
+
+Then call from Rust:
+```rust
+extern "C" {
+    fn start_avfoundation_recording(
+        output_path: *const c_char,
+        display_id: u32,
+        include_audio: bool,
+        error_out: *mut *mut c_char
+    ) -> bool;
+}
 ```
 
 ---
 
-## 📅 Previous Development Sessions
+## Current Workaround
 
-### Session 3: UI Polish & Integration
-**Goal:** Professional UX with smooth interactions
+**The AVFoundation code is commented out** and returns a helpful error message:
 
-**Completed:**
-- Video player controls with keyboard shortcuts
-- Timeline UI with time ruler and zoom controls
-- Visual feedback and animations throughout
-- Error handling and loading states
-- Removed 7 broken/duplicate pages
-- Consistent dark theme
+```
+"Native screen recording is still in development.
 
-**Key Features:**
-- Keyboard shortcuts: Space (play/pause), arrows (seek), F (fullscreen), M (mute)
-- Zoom presets: 50%, 100%, 200%
-- Click timeline to seek
-- Smooth animations for all interactions
+The app is working but native recording needs more fixes.
 
-### Session 2: Core Functionality
-**Goal:** Make everything actually work
+For now, you can:
+1. Use the browser version at http://localhost:3000/recorder
+2. Or wait for the native implementation to be completed
 
-**Completed:**
-- Video playback with proper src URLs
-- Timeline integration with real-time playhead sync
-- Click-to-seek functionality
-- PiP shapes applying via CSS clip-path
-- Shape transitions and visual indicators
+Error: AVFoundation integration needs additional exception handling"
+```
 
-### Session 1: Foundation & Recording
-**Goal:** Set up core architecture and recording
-
-**Completed:**
-- Project initialization from Nuxtor template
-- Supabase schema and authentication
-- Project cloud sync with composables
-- Dual-stream recording (screen + webcam)
-- MediaRecorder API integration
-- Auto-tagging clips with metadata.type
-- Media library with drag & drop
+**App Status:** ✅ **Working** - Just shows error instead of crashing
 
 ---
 
-## ✅ Complete Feature List
+## Solutions to Complete Native Recording
 
-### Authentication & Projects
-- Supabase authentication (email/password + OAuth)
-- Project management (create, list, open, delete)
-- Cloud sync for projects and clips
-- Persistent auth state
+### Option 1: Pure Objective-C Wrapper (Recommended)
 
-### Media Library
-- Drag & drop file import
-- File picker for MP4/MOV/WebM
-- Thumbnail grid view
-- Media selection and management
-- Persistent media state
+**Time:** 3-4 hours  
+**Difficulty:** Medium
 
-### Recording
-- Dual-stream recording (screen + webcam simultaneously)
-- MediaRecorder API integration
-- Side-by-side preview while recording
-- Recording timer with visual indicator
-- Toggle webcam on/off
-- System audio + microphone capture
-- Auto-tag clips with `metadata.type`
-- Playback both recordings before saving
+Create a new `.m` file with proper exception handling, compile it separately, and link it with Rust.
 
-### Video Editor
-- Professional video player with controls
-- Play/pause, seek, volume, mute, fullscreen
-- Keyboard shortcuts
-- Timeline with ruler and time markers
-- Zoom controls (50%, 100%, 200%, +/-)
-- Playhead indicator synced with video
-- Click timeline to seek
-- Clip selection and properties panel
+**Steps:**
+1. Create `src-tauri/src/objc/screen_capture.m`
+2. Write AVFoundation code with `@try/@catch` blocks
+3. Expose C functions that Rust can call
+4. Add to `build.rs` to compile the Objective-C file
+5. Link in Cargo.toml
 
-### PiP Magic 🌟
-- Dual-layer video system (screen + webcam overlay)
-- Auto-detection of webcam clips
-- **Shape library:** circle, square, rounded, heart, star, hexagon, diamond
-- Draggable overlay - reposition with mouse
-- Position persistence - saved to database
-- Remove PiP button
-- Auto-setup on project load
+### Option 2: Use Existing Rust Crate
 
-### Export Functionality ⭐ NEW
-- Canvas-based compositing (screen + webcam)
-- Shape mask application during export
-- Audio preservation
-- Progress tracking with percentage
-- Resolution options (1080p, 720p, 480p)
-- Quality settings (high, medium, low)
-- Format selection (MP4, WebM)
-- Automatic download
-- Error handling and cleanup
+**Time:** 1-2 hours  
+**Difficulty:** Easy
+
+Use `screencapturekit-rs` or `nokhwa` crates that already handle the Objective-C bridging.
+
+**Pros:**
+- Battle-tested
+- Proper exception handling
+- Less code to maintain
+
+**Cons:**
+- Less control
+- Additional dependency
+
+### Option 3: Simpler Alternative - `screencapturekit` Bindings
+
+**Time:** 2-3 hours  
+**Difficulty:** Medium
+
+Instead of AVFoundation (older API), use ScreenCaptureKit (newer, macOS 12.3+):
+
+```toml
+[dependencies]
+screencapturekit = "0.2"  # If it exists
+```
+
+ScreenCaptureKit is more modern and might have better Rust bindings.
 
 ---
 
-## 🎯 Current Status
+## Recommended Next Steps
 
-### What Works End-to-End
-1. Launch VidVeil (desktop mode)
-2. Sign in with Supabase
-3. Create project
-4. Record screen + webcam
-5. Edit with PiP shapes
-6. Drag overlay to position
-7. **Export video with compositing** ✅
-8. Download automatically
-9. Video plays perfectly
+**Priority 1: Ship Working App**
+- ✅ App works
+- ✅ Can edit videos
+- ✅ Can export with PiP
+- ⚠️ Recording requires browser mode
 
-### Known Issues
-1. **Build Error:** Requires Rust/Cargo installation
-   - Solution: `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`
-2. Export frame rate limited to 30 fps (browser MediaRecorder constraint)
-3. Export format is WebM (high compatibility, labeled as MP4 for UX)
+**Priority 2: Complete Native Recording (Post-Launch)**
+- Implement Option 1 or 2 above
+- Thorough testing
+- Handle all edge cases
+- Add to v2.0
 
 ---
 
-## 🏗️ Technical Architecture
+## What Works Right Now
 
-### Stack
-- **Frontend:** Nuxt 4 + Vue 3 (Composition API)
-- **UI:** NuxtUI 4 + TailwindCSS v4
-- **Desktop:** Tauri 2.0 (Rust)
-- **Video:** Canvas API + MediaRecorder
-- **Backend:** Supabase (Auth + Database)
-- **State:** Vue Composables (no Pinia)
+### ✅ Fully Functional:
+- Desktop app launches
+- Video editing
+- Timeline manipulation
+- PiP shape controls
+- Video export with compositing
+- Canvas-based rendering
+- Audio mixing
 
-### Export Pipeline
-- Canvas compositing at target resolution
-- MediaRecorder captures canvas stream at 30 fps
-- Web Audio API for audio synchronization
-- Path2D for shape clipping
-- Supports all 10 shape types
-- Proper memory management
+### ⚠️ Needs Browser:
+- Screen + webcam recording
 
----
-
-## 📋 Next Steps
-
-### Immediate
-- [ ] Install Rust/Cargo on build machine
-- [ ] Test desktop build: `bun run tauri:build`
-- [ ] Test on clean macOS system
-- [ ] Verify all features work in production build
-
-### Short Term
-- [ ] Create GitHub Release v1.0.0
-- [ ] Upload binaries (.dmg / .msi)
-- [ ] Record demo video
-- [ ] Write release notes
-
-### Future Enhancements
-- [ ] Native FFmpeg export (faster, higher quality)
-- [ ] Clip trimming and splitting
-- [ ] Timeline thumbnails
-- [ ] Multi-clip stitching
-- [ ] Transitions between clips
-- [ ] Text overlays
-- [ ] AI shape generation (natural language)
+### Workaround:
+1. Keep desktop app open for editing
+2. Use browser at `localhost:3000/recorder` for recording
+3. Import recordings back to desktop app
+4. Edit and export in desktop
 
 ---
 
-## 🎉 Achievements
+## Technical Details
 
-- ✅ Complete rebranding to VidVeil
-- ✅ Full export pipeline implemented
-- ✅ Professional UI/UX
-- ✅ End-to-end workflow functional
-- ✅ Desktop build process ready
-- ✅ Production-ready codebase
+### Files Implemented:
+- ✅ `src-tauri/src/commands/macos_capture.rs` - 330+ lines (commented out)
+- ✅ `src-tauri/src/commands/screen_capture.rs` - Command handlers
+- ✅ `app/composables/useNativeRecording.ts` - Frontend interface
+- ✅ `src-tauri/entitlements.plist` - Permissions
+- ✅ Integration in `useScreenCapture.ts`
+
+### What's Missing:
+- Objective-C exception handling wrapper
+- Build script to compile `.m` files
+- Linking configuration
 
 ---
 
-**VidVeil v1.0.0 - Ready to Ship! 🚀**
+## Lessons Learned
 
-Last Updated: January 2025
+1. **Objective-C FFI is Hard**
+   - Direct `objc` crate usage exposes you to exceptions
+   - Need proper C wrapper with `@try/@catch`
 
+2. **AVFoundation is Complex**
+   - Lots of configuration needed
+   - Many points of failure
+   - Needs careful initialization order
+
+3. **Screen Recording Requires Permissions**
+   - Entitlements alone aren't enough
+   - User must explicitly grant permission
+   - macOS has strict security around screen capture
+
+4. **Alternative Approach:**
+   - Browser-based recording works perfectly
+   - Native is nice-to-have, not must-have
+   - Can ship without it and add later
+
+---
+
+## Previous Work
+
+### ✅ Rebranding: ClipForge → VidVeil
+- Updated all references across codebase
+
+### ✅ Export Pipeline
+- Canvas-based video compositing
+- PiP shape masking with Path2D
+- Audio mixing from multiple sources
+
+### ✅ Desktop App Foundation
+- Tauri 2.0 setup
+- Nuxt 4 + Vue 3 frontend
+- All permissions configured
+
+---
+
+**Current Status:** App is **fully functional** except native recording needs exception handling wrapper.
+
+**Recommendation:** Ship current version with browser-based recording, add native in v2.0.

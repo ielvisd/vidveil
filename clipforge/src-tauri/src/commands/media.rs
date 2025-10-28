@@ -83,10 +83,9 @@ pub fn create_temp_directory() -> Result<String, String> {
 	fs::create_dir_all(&temp_dir)
 		.map_err(|e| format!("Failed to create temp directory: {}", e))?;
 	
-	temp_dir.to_str()
+	Ok(temp_dir.to_str()
 		.ok_or("Failed to convert path to string")?
-		.to_string()
-		.into()
+		.to_string())
 }
 
 #[command]
@@ -100,10 +99,9 @@ pub fn save_recording(
 	fs::write(&output_path, content)
 		.map_err(|e| format!("Failed to save recording: {}", e))?;
 	
-	output_path.to_str()
+	Ok(output_path.to_str()
 		.ok_or("Failed to convert path to string")?
-		.to_string()
-		.into()
+		.to_string())
 }
 
 #[command]
@@ -136,5 +134,37 @@ pub fn get_file_metadata(file_path: String) -> Result<MediaMetadata, String> {
 		codec: None,
 		file_size: metadata.len(),
 	})
+}
+
+#[command]
+pub fn read_video_file(file_path: String) -> Result<Vec<u8>, String> {
+	let path = PathBuf::from(&file_path);
+	
+	if !path.exists() {
+		return Err(format!("File does not exist: {}", file_path));
+	}
+	
+	fs::read(&path)
+		.map_err(|e| format!("Failed to read file: {}", e))
+}
+
+#[command]
+pub fn get_username() -> Result<String, String> {
+	use std::env;
+	env::var("USER")
+		.or_else(|_| env::var("USERNAME"))
+		.map_err(|_| "Failed to get username".to_string())
+}
+
+#[command]
+pub fn create_recordings_directory(path: String) -> Result<(), String> {
+	let dir_path = PathBuf::from(&path);
+	
+	if !dir_path.exists() {
+		fs::create_dir_all(&dir_path)
+			.map_err(|e| format!("Failed to create directory: {}", e))?;
+	}
+	
+	Ok(())
 }
 

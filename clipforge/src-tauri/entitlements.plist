@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Camera access for webcam recording -->
+    <key>com.apple.security.device.camera</key>
+    <true/>
+    
+    <!-- Microphone access for audio recording -->
+    <key>com.apple.security.device.audio-input</key>
+    <true/>
+    
+    <!-- Network access (for dev server in dev mode) -->
+    <key>com.apple.security.network.client</key>
+    <true/>
+    
+    <!-- File system access -->
+    <key>com.apple.security.files.user-selected.read-write</key>
+    <true/>
+    
+    <!-- Disable App Sandbox for now (screen recording requires it) -->
+    <key>com.apple.security.app-sandbox</key>
+    <false/>
+    
+    <!-- Allow screen recording -->
+    <key>com.apple.security.temporary-exception.mach-lookup.global-name</key>
+    <array>
+        <string>com.apple.screencapturekit.display</string>
+    </array>
+</dict>
+</plist>
+
+
+
+
