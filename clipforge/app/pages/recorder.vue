@@ -497,18 +497,31 @@ onUnmounted(() => {
 }
 
 .playback-area {
+	text-align: center;
+	width: 100%;
+	padding: 2rem;
 	display: flex;
 	flex-direction: column;
 	align-items: center;
-	gap: 1rem;
-	padding: 2rem;
-	width: 100%;
+	gap: 1.5rem;
 }
 
 .playback-area h3 {
-	margin: 0 0 1rem 0;
-	font-size: 1.25rem;
+	margin: 0;
+	font-size: 1.5rem;
 	font-weight: 600;
+	color: white;
+}
+
+.preview-note {
+	margin: 0;
+	color: rgb(156 163 175);
+	font-size: 0.875rem;
+}
+
+.playback-preview {
+	box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.4);
+	border: 2px solid rgb(59 130 246);
 }
 
 .recording-actions {
