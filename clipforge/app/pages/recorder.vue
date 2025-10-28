@@ -28,29 +28,25 @@
 				
 				<!-- Currently Recording -->
 				<div v-else-if="isRecording" class="recording-active">
-					<div class="preview-grid">
-						<!-- Screen Preview -->
-						<div class="preview-main">
-							<video
-								ref="screenPreview"
-								:srcObject="screenStream"
-								autoplay
-								muted
-								class="preview-video"
-							/>
-							<div class="preview-label">Screen</div>
-						</div>
-
-						<!-- Webcam Preview -->
-						<div v-if="webcamStream" class="preview-webcam">
+					<div class="preview-pip-container">
+						<!-- Screen Preview (Main) -->
+						<video
+							ref="screenPreview"
+							:srcObject="screenStream"
+							autoplay
+							muted
+							class="preview-video-main"
+						/>
+						
+						<!-- Webcam Preview (PiP Overlay) -->
+						<div v-if="webcamStream" class="preview-pip-overlay">
 							<video
 								ref="webcamPreview"
 								:srcObject="webcamStream"
 								autoplay
 								muted
-								class="preview-video webcam"
+								class="preview-video-pip"
 							/>
-							<div class="preview-label">Webcam</div>
 						</div>
 					</div>
 
@@ -77,14 +73,17 @@
 					<div class="recording-actions">
 						<UButton 
 							@click="saveRecordings"
+							:disabled="saving"
+							:loading="saving"
 							color="primary"
 							icon="i-heroicons-check"
 							size="lg"
 						>
-							Add to Project
+							{{ saving ? 'Saving...' : 'Add to Project' }}
 						</UButton>
 						<UButton 
 							@click="discardRecordings"
+							:disabled="saving"
 							variant="outline"
 							icon="i-heroicons-trash"
 						>
@@ -226,9 +225,12 @@ const getVideoDuration = (blob: Blob): Promise<number> => {
 	})
 }
 
-const saveRecordings = async () => {
-	if (!recordedScreenBlob.value || !currentProject.value) return
+const saving = ref(false)
 
+const saveRecordings = async () => {
+	if (!recordedScreenBlob.value || !currentProject.value || saving.value) return
+
+	saving.value = true
 	try {
 		// Save screen recording
 		const screenFile = new File(
@@ -268,6 +270,8 @@ const saveRecordings = async () => {
 		await navigateTo(`/project/${currentProject.value.id}`)
 	} catch (error) {
 		console.error('Failed to save recordings:', error)
+	} finally {
+		saving.value = false
 	}
 }
 
@@ -376,40 +380,41 @@ onUnmounted(() => {
 	align-items: center;
 	justify-content: center;
 	gap: 2rem;
-}
-
-.preview-grid {
-	display: grid;
-	grid-template-columns: 2fr 1fr;
-	gap: 1rem;
-	width: 100%;
-	height: 100%;
 	padding: 2rem;
 }
 
-.preview-main {
+.preview-pip-container {
 	position: relative;
+	width: 100%;
+	max-width: 1280px;
+	aspect-ratio: 16 / 9;
 	background-color: #000;
 	border-radius: 0.5rem;
 	overflow: hidden;
 }
 
-.preview-webcam {
-	position: relative;
-	background-color: #000;
-	border-radius: 0.5rem;
-	overflow: hidden;
+.preview-video-main {
+	width: 100%;
+	height: 100%;
+	object-fit: contain;
 }
 
-.preview-label {
+.preview-pip-overlay {
 	position: absolute;
-	bottom: 0.5rem;
-	left: 0.5rem;
-	background-color: rgba(0, 0, 0, 0.7);
-	color: white;
-	padding: 0.25rem 0.5rem;
-	border-radius: 0.25rem;
-	font-size: 0.75rem;
+	bottom: 5%;
+	right: 5%;
+	width: 20%;
+	aspect-ratio: 16 / 9;
+	border: 3px solid white;
+	border-radius: 50%;
+	overflow: hidden;
+	box-shadow: 0 8px 16px rgba(0, 0, 0, 0.4);
+}
+
+.preview-video-pip {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
 }
 
 .recording-indicator {

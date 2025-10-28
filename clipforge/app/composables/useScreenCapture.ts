@@ -44,9 +44,28 @@ export const useScreenCapture = () => {
 							height: { ideal: 720 },
 							facingMode: 'user'
 						},
-						audio: false // Audio already captured from screen
+						audio: {
+							echoCancellation: true,
+							noiseSuppression: true,
+							sampleRate: 44100
+						}
 					})
 					webcamStream.value = camStream
+
+					// Merge webcam audio with screen stream
+					if (displayStream.getAudioTracks().length > 0) {
+						const audioContext = new AudioContext()
+						const screenAudio = audioContext.createMediaStreamSource(displayStream)
+						const webcamAudio = audioContext.createMediaStreamSource(camStream)
+						const destination = audioContext.createMediaStreamDestination()
+						
+						screenAudio.connect(destination)
+						webcamAudio.connect(destination)
+						
+						// Replace screen audio track with merged audio
+						displayStream.getAudioTracks().forEach(track => displayStream.removeTrack(track))
+						destination.stream.getAudioTracks().forEach(track => displayStream.addTrack(track))
+					}
 				} catch (err) {
 					console.warn('Webcam access denied, continuing with screen only:', err)
 					includeWebcam.value = false

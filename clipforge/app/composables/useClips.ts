@@ -37,18 +37,19 @@ export const useClips = () => {
 				const blob = await fetch(src).then(r => r.blob())
 				const fileSize = blob.size
 
-				console.log(`File size: ${(fileSize / 1024 / 1024).toFixed(2)}MB`)
+				const sizeMB = (fileSize / 1024 / 1024).toFixed(2)
+				console.log(`📦 File size: ${sizeMB}MB`)
 
 				// Decide storage strategy based on file size
 				if (fileSize > MAX_SUPABASE_SIZE) {
 					// Store locally in IndexedDB
-					console.log('📦 Storing in IndexedDB (file too large for Supabase)')
+					console.log(`📦 File too large (${sizeMB}MB > 50MB), storing in IndexedDB`)
 					await saveVideoToIndexedDB(clipId, blob, metadata)
 					fileUrl = `indexeddb://${clipId}`
 					storageType = 'local'
 				} else {
 					// Upload to Supabase Storage
-					console.log('☁️ Uploading to Supabase Storage')
+					console.log(`☁️ File under 50MB, uploading to Supabase...`)
 					const fileName = `${projectId}/${Date.now()}-${metadata.name || 'clip'}.webm`
 					
 					const { data: uploadData, error: uploadError } = await supabase
@@ -61,7 +62,8 @@ export const useClips = () => {
 
 					if (uploadError) {
 						// Fallback to IndexedDB if upload fails
-						console.warn('Supabase upload failed, falling back to IndexedDB:', uploadError)
+						console.warn(`⚠️ Supabase upload failed (${uploadError.message}), using IndexedDB instead`)
+						console.log('💡 Tip: Create a "clips" bucket in your Supabase dashboard for cloud storage')
 						await saveVideoToIndexedDB(clipId, blob, metadata)
 						fileUrl = `indexeddb://${clipId}`
 						storageType = 'local'
@@ -73,6 +75,7 @@ export const useClips = () => {
 							.getPublicUrl(fileName)
 
 						fileUrl = urlData.publicUrl
+						console.log(`✅ Uploaded to Supabase Storage`)
 					}
 				}
 			}
