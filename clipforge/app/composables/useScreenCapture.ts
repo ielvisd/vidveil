@@ -54,33 +54,58 @@ export const useScreenCapture = () => {
 
 					// Merge webcam audio (microphone) with screen audio
 					try {
-						const audioContext = new AudioContext()
-						const destination = audioContext.createMediaStreamDestination()
+						const hasScreenAudio = displayStream.getAudioTracks().length > 0
+						const hasMicAudio = camStream.getAudioTracks().length > 0
 						
-						// Add screen audio if available
-						if (displayStream.getAudioTracks().length > 0) {
-							const screenAudio = audioContext.createMediaStreamSource(displayStream)
-							screenAudio.connect(destination)
-							console.log('🔊 Added screen audio to mix')
+						console.log('🎙️ Audio setup:', { hasScreenAudio, hasMicAudio })
+						
+						// Only mix if we have both audio sources
+						if (hasScreenAudio && hasMicAudio) {
+							const audioContext = new AudioContext()
+							const destination = audioContext.createMediaStreamDestination()
+							
+							// Create gain nodes to prevent clipping and improve quality
+							const screenGain = audioContext.createGain()
+							const micGain = audioContext.createGain()
+							
+							// Reduce screen audio slightly, boost mic
+							screenGain.gain.value = 0.7  // 70% system audio
+							micGain.gain.value = 1.2     // 120% microphone (clearer voice)
+							
+							// Connect screen audio
+							const screenSource = audioContext.createMediaStreamSource(displayStream)
+							screenSource.connect(screenGain)
+							screenGain.connect(destination)
+							console.log('🔊 Added screen audio (70% volume)')
+							
+							// Connect microphone audio
+							const micSource = audioContext.createMediaStreamSource(camStream)
+							micSource.connect(micGain)
+							micGain.connect(destination)
+							console.log('🎤 Added microphone audio (120% volume for clarity)')
+							
+							// Replace screen audio tracks with merged audio
+							displayStream.getAudioTracks().forEach(track => {
+								displayStream.removeTrack(track)
+								track.stop()
+							})
+							destination.stream.getAudioTracks().forEach(track => displayStream.addTrack(track))
+							
+							console.log('✅ Audio mixing complete - voice should be clear!')
+						} else if (hasMicAudio) {
+							// No screen audio, just use microphone
+							console.log('🎤 Using microphone audio only (no system audio)')
+							camStream.getAudioTracks().forEach(track => displayStream.addTrack(track.clone()))
+						} else {
+							console.log('🔇 No audio sources available')
 						}
-						
-						// Add webcam/microphone audio
-						if (camStream.getAudioTracks().length > 0) {
-							const webcamAudio = audioContext.createMediaStreamSource(camStream)
-							webcamAudio.connect(destination)
-							console.log('🎤 Added microphone audio to mix')
-						}
-						
-						// Replace screen audio tracks with merged audio
-						displayStream.getAudioTracks().forEach(track => {
-							displayStream.removeTrack(track)
-							track.stop()
-						})
-						destination.stream.getAudioTracks().forEach(track => displayStream.addTrack(track))
-						
-						console.log('✅ Audio mixing complete - you should hear both system + microphone')
 					} catch (audioErr) {
-						console.warn('Audio mixing failed, using screen audio only:', audioErr)
+						console.warn('⚠️ Audio mixing failed:', audioErr)
+						// Fallback: just add microphone track if available
+						if (camStream.getAudioTracks().length > 0) {
+							console.log('📎 Fallback: Adding microphone track directly')
+							camStream.getAudioTracks().forEach(track => displayStream.addTrack(track.clone()))
+						}
 					}
 				} catch (err) {
 					console.warn('Webcam access denied, continuing with screen only:', err)

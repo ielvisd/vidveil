@@ -246,7 +246,19 @@ const getVideoDuration = (blob: Blob): Promise<number> => {
 const saving = ref(false)
 
 const saveRecordings = async () => {
-	if (!recordedScreenBlob.value || !currentProject.value || saving.value) return
+	if (!recordedScreenBlob.value || saving.value) return
+	
+	console.log('💾 Saving recordings...', {
+		hasScreen: !!recordedScreenBlob.value,
+		hasWebcam: !!recordedWebcamBlob.value,
+		hasProject: !!currentProject.value
+	})
+
+	if (!currentProject.value) {
+		console.error('❌ No current project - cannot save')
+		alert('No project selected. Please go back and select a project first.')
+		return
+	}
 
 	saving.value = true
 	try {
@@ -259,6 +271,7 @@ const saveRecordings = async () => {
 		const screenSrc = URL.createObjectURL(screenFile)
 		const screenDuration = await getVideoDuration(recordedScreenBlob.value)
 
+		console.log('📥 Adding screen recording to project...')
 		await addClip(currentProject.value.id, screenSrc, {
 			name: 'Screen Recording',
 			duration: screenDuration,
@@ -276,6 +289,7 @@ const saveRecordings = async () => {
 			const webcamSrc = URL.createObjectURL(webcamFile)
 			const webcamDuration = await getVideoDuration(recordedWebcamBlob.value)
 
+			console.log('📥 Adding webcam recording to project...')
 			await addClip(currentProject.value.id, webcamSrc, {
 				name: 'Webcam',
 				duration: webcamDuration,
@@ -284,10 +298,12 @@ const saveRecordings = async () => {
 			})
 		}
 
+		console.log('✅ Recordings saved! Navigating to project...')
 		// Navigate back to project
 		await navigateTo(`/project/${currentProject.value.id}`)
-	} catch (error) {
-		console.error('Failed to save recordings:', error)
+	} catch (error: any) {
+		console.error('❌ Failed to save recordings:', error)
+		alert(`Failed to save: ${error.message}`)
 	} finally {
 		saving.value = false
 	}
