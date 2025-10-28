@@ -52,19 +52,35 @@ export const useScreenCapture = () => {
 					})
 					webcamStream.value = camStream
 
-					// Merge webcam audio with screen stream
-					if (displayStream.getAudioTracks().length > 0) {
+					// Merge webcam audio (microphone) with screen audio
+					try {
 						const audioContext = new AudioContext()
-						const screenAudio = audioContext.createMediaStreamSource(displayStream)
-						const webcamAudio = audioContext.createMediaStreamSource(camStream)
 						const destination = audioContext.createMediaStreamDestination()
 						
-						screenAudio.connect(destination)
-						webcamAudio.connect(destination)
+						// Add screen audio if available
+						if (displayStream.getAudioTracks().length > 0) {
+							const screenAudio = audioContext.createMediaStreamSource(displayStream)
+							screenAudio.connect(destination)
+							console.log('🔊 Added screen audio to mix')
+						}
 						
-						// Replace screen audio track with merged audio
-						displayStream.getAudioTracks().forEach(track => displayStream.removeTrack(track))
+						// Add webcam/microphone audio
+						if (camStream.getAudioTracks().length > 0) {
+							const webcamAudio = audioContext.createMediaStreamSource(camStream)
+							webcamAudio.connect(destination)
+							console.log('🎤 Added microphone audio to mix')
+						}
+						
+						// Replace screen audio tracks with merged audio
+						displayStream.getAudioTracks().forEach(track => {
+							displayStream.removeTrack(track)
+							track.stop()
+						})
 						destination.stream.getAudioTracks().forEach(track => displayStream.addTrack(track))
+						
+						console.log('✅ Audio mixing complete - you should hear both system + microphone')
+					} catch (audioErr) {
+						console.warn('Audio mixing failed, using screen audio only:', audioErr)
 					}
 				} catch (err) {
 					console.warn('Webcam access denied, continuing with screen only:', err)

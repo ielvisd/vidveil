@@ -80,6 +80,10 @@
 								class="preview-video-pip"
 								muted
 							/>
+							<div class="audio-indicator">
+								<i class="i-heroicons-microphone text-xs" />
+								<span class="audio-label">Audio in main track</span>
+							</div>
 						</div>
 					</div>
 
@@ -450,6 +454,26 @@ onUnmounted(() => {
 	width: 100%;
 	height: 100%;
 	object-fit: cover;
+}
+
+.audio-indicator {
+	position: absolute;
+	bottom: 0.25rem;
+	left: 50%;
+	transform: translateX(-50%);
+	background-color: rgba(0, 0, 0, 0.8);
+	color: rgb(147, 197, 253);
+	padding: 0.25rem 0.5rem;
+	border-radius: 0.25rem;
+	font-size: 0.625rem;
+	display: flex;
+	align-items: center;
+	gap: 0.25rem;
+	white-space: nowrap;
+}
+
+.audio-label {
+	font-size: 0.625rem;
 }
 
 .recording-indicator {
