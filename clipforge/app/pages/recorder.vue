@@ -66,19 +66,24 @@
 					<div class="preview-pip-container playback-preview">
 						<!-- Screen Video (Main) -->
 						<video 
+							v-if="screenBlobUrl"
 							:src="screenBlobUrl" 
 							controls 
 							class="preview-video-main"
+							preload="metadata"
 							@loadedmetadata="handlePlaybackLoaded"
+							@error="handleVideoError"
 						/>
 						
 						<!-- Webcam Video (PiP Overlay) -->
-						<div v-if="recordedWebcamBlob" class="preview-pip-overlay">
+						<div v-if="recordedWebcamBlob && webcamBlobUrl" class="preview-pip-overlay">
 							<video 
 								:src="webcamBlobUrl" 
 								ref="webcamPlayback"
 								class="preview-video-pip"
+								preload="metadata"
 								muted
+								@error="handleVideoError"
 							/>
 							<div class="audio-indicator">
 								<i class="i-heroicons-microphone text-xs" />
@@ -90,13 +95,13 @@
 					<div class="recording-actions">
 						<UButton 
 							@click="saveRecordings"
-							:disabled="saving"
+							:disabled="saving || !currentProject"
 							:loading="saving"
 							color="primary"
 							icon="i-heroicons-check"
 							size="lg"
 						>
-							{{ saving ? 'Saving...' : 'Add to Project' }}
+							{{ saving ? 'Saving...' : (currentProject ? 'Add to Project' : 'No Project Selected') }}
 						</UButton>
 						<UButton 
 							@click="discardRecordings"
@@ -107,6 +112,9 @@
 							Discard & Re-record
 						</UButton>
 					</div>
+					<p v-if="!currentProject" class="no-project-warning">
+						⚠️ Please select a project first to save recordings
+					</p>
 				</div>
 			</div>
 
@@ -115,7 +123,7 @@
 				<div v-if="!isRecording && !recordedScreenBlob" class="control-buttons">
 					<UButton 
 						@click="startRecording"
-						color="red"
+						color="error"
 						size="xl"
 						icon="i-heroicons-video-camera"
 					>
@@ -125,7 +133,7 @@
 				<div v-else-if="isRecording" class="control-buttons">
 					<UButton 
 						@click="stopRecording"
-						color="gray"
+						color="neutral"
 						size="xl"
 						icon="i-heroicons-stop"
 					>
@@ -175,6 +183,8 @@
 
 <script setup lang="ts">
 const router = useRouter()
+const route = useRoute()
+
 const { 
 	screenStream, 
 	webcamStream, 
@@ -188,7 +198,7 @@ const {
 	reset
 } = useScreenCapture()
 
-const { currentProject } = useProject()
+const { currentProject, selectProject } = useProject()
 const { addClip } = useClips()
 
 const screenPreview = ref<HTMLVideoElement | null>(null)
@@ -198,14 +208,33 @@ const recordingTime = ref('00:00')
 const recordingInterval = ref<NodeJS.Timeout | null>(null)
 const recordingStartTime = ref<number>(0)
 
-const screenBlobUrl = computed(() => {
-	if (!recordedScreenBlob.value) return ''
-	return URL.createObjectURL(recordedScreenBlob.value)
+// Use refs instead of computed to avoid recreating URLs
+const screenBlobUrl = ref('')
+const webcamBlobUrl = ref('')
+
+// Watch for blob changes and create URLs once
+watch(recordedScreenBlob, (newBlob) => {
+	if (screenBlobUrl.value) {
+		URL.revokeObjectURL(screenBlobUrl.value)
+	}
+	if (newBlob) {
+		console.log('📹 Screen blob size:', (newBlob.size / 1024 / 1024).toFixed(2), 'MB')
+		screenBlobUrl.value = URL.createObjectURL(newBlob)
+	} else {
+		screenBlobUrl.value = ''
+	}
 })
 
-const webcamBlobUrl = computed(() => {
-	if (!recordedWebcamBlob.value) return ''
-	return URL.createObjectURL(recordedWebcamBlob.value)
+watch(recordedWebcamBlob, (newBlob) => {
+	if (webcamBlobUrl.value) {
+		URL.revokeObjectURL(webcamBlobUrl.value)
+	}
+	if (newBlob) {
+		console.log('📷 Webcam blob size:', (newBlob.size / 1024 / 1024).toFixed(2), 'MB')
+		webcamBlobUrl.value = URL.createObjectURL(newBlob)
+	} else {
+		webcamBlobUrl.value = ''
+	}
 })
 
 const startRecording = async () => {
@@ -312,6 +341,11 @@ const saveRecordings = async () => {
 const handlePlaybackLoaded = (event: Event) => {
 	// Sync webcam playback with screen playback
 	const screenVideo = event.target as HTMLVideoElement
+	console.log('✅ Video loaded successfully:', {
+		duration: screenVideo.duration,
+		videoWidth: screenVideo.videoWidth,
+		videoHeight: screenVideo.videoHeight
+	})
 	
 	if (webcamPlayback.value && screenVideo) {
 		screenVideo.addEventListener('play', () => {
@@ -330,6 +364,30 @@ const handlePlaybackLoaded = (event: Event) => {
 	}
 }
 
+const handleVideoError = (event: Event) => {
+	const video = event.target as HTMLVideoElement
+	const videoError = video.error
+	console.error('❌ Video playback error:', {
+		code: videoError?.code,
+		message: videoError?.message,
+		src: video.src
+	})
+	
+	// Log blob info for debugging
+	if (recordedScreenBlob.value) {
+		console.log('Screen blob info:', {
+			size: recordedScreenBlob.value.size,
+			type: recordedScreenBlob.value.type
+		})
+	}
+	if (recordedWebcamBlob.value) {
+		console.log('Webcam blob info:', {
+			size: recordedWebcamBlob.value.size,
+			type: recordedWebcamBlob.value.type
+		})
+	}
+}
+
 const discardRecordings = () => {
 	reset()
 	recordingTime.value = '00:00'
@@ -343,15 +401,52 @@ const goBack = () => {
 	}
 }
 
+// Load project on mount if provided in query params
+onMounted(async () => {
+	const projectId = route.query.project as string
+	
+	if (projectId && !currentProject.value) {
+		console.log('📋 Loading project from query param:', projectId)
+		
+		// Wait for auth to be ready
+		const { loading: authLoading } = useAuth()
+		let attempts = 0
+		while (authLoading.value && attempts < 50) {
+			await new Promise(resolve => setTimeout(resolve, 100))
+			attempts++
+		}
+		
+		if (authLoading.value) {
+			console.error('❌ Auth timeout - still loading after 5s')
+			error.value = 'Authentication is taking too long'
+			return
+		}
+		
+		const result = await selectProject(projectId)
+		
+		if (result.error) {
+			console.error('❌ Failed to load project:', result.error)
+			error.value = `Failed to load project: ${result.error}`
+		} else {
+			console.log('✅ Project loaded:', result.project?.name)
+		}
+	} else if (!projectId && !currentProject.value) {
+		console.warn('⚠️ No project ID provided - recordings cannot be saved without a project')
+	}
+})
+
 // Cleanup on unmount
 onUnmounted(() => {
 	stopRecording()
 	
+	// Clean up blob URLs
 	if (screenBlobUrl.value) {
 		URL.revokeObjectURL(screenBlobUrl.value)
+		screenBlobUrl.value = ''
 	}
 	if (webcamBlobUrl.value) {
 		URL.revokeObjectURL(webcamBlobUrl.value)
+		webcamBlobUrl.value = ''
 	}
 })
 </script>
@@ -651,5 +746,16 @@ onUnmounted(() => {
 	color: rgb(248, 113, 113);
 	font-size: 0.875rem;
 	margin: 0;
+}
+
+.no-project-warning {
+	margin-top: 1rem;
+	padding: 0.75rem 1rem;
+	background-color: rgba(251, 191, 36, 0.1);
+	border: 1px solid rgba(251, 191, 36, 0.3);
+	border-radius: 0.375rem;
+	color: rgb(251, 191, 36);
+	font-size: 0.875rem;
+	text-align: center;
 }
 </style>

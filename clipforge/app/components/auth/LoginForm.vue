@@ -1,7 +1,7 @@
 <template>
 	<UCard>
 		<template #header>
-			<h2 class="text-2xl font-bold">Sign In to ClipForge</h2>
+			<h2 class="text-2xl font-bold">Sign In to VidVeil</h2>
 		</template>
 
 		<div class="form-field">

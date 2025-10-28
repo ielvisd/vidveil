@@ -91,14 +91,14 @@
 					<template #header>
 						<div class="clip-header">
 							<h3>Clip Properties</h3>
-							<UButton 
-								@click="removeClip"
-								color="red"
-								variant="ghost"
-								size="xs"
-								icon="i-heroicons-trash"
-								title="Remove Clip"
-							/>
+						<UButton 
+							@click="removeClip"
+							color="error"
+							variant="ghost"
+							size="xs"
+							icon="i-heroicons-trash"
+							title="Remove Clip"
+						/>
 						</div>
 					</template>
 					<div class="properties">
@@ -521,13 +521,15 @@ onMounted(async () => {
 	window.addEventListener('resize', updateContainerSize)
 	
 	if (projectId) {
+		loading.value = true
+		error.value = null
+		
 		try {
-			loading.value = true
-			error.value = null
-
 			const result = await selectProject(projectId)
 			if (result.error) {
+				console.error('❌ Project load error:', result.error)
 				error.value = result.error
+				loading.value = false
 				return
 			}
 
@@ -537,15 +539,17 @@ onMounted(async () => {
 			const clipsResult = await fetchClips(projectId)
 			
 			if (clipsResult.error) {
+				console.error('❌ Clips load error:', clipsResult.error)
 				error.value = clipsResult.error
+				loading.value = false
 				return
 			}
 			
 			console.log('✅ Loaded', clips.value.length, 'clip(s)')
 			
 			// Auto-select first non-webcam clip as main video
-			const screenClip = clips.value.find(c => c.metadata?.type !== 'webcam')
-			const webcam = clips.value.find(c => c.metadata?.type === 'webcam')
+			const screenClip = clips.value.find((c: any) => c.metadata?.type !== 'webcam')
+			const webcam = clips.value.find((c: any) => c.metadata?.type === 'webcam')
 			
 			if (screenClip) {
 				activeClip.value = screenClip
@@ -564,12 +568,16 @@ onMounted(async () => {
 				applyPipShape('circle', webcam.id)
 				console.log('📷 Webcam PiP setup:', webcam.name)
 			}
+			
+			console.log('✅ Loading complete, setting loading to false')
+			loading.value = false
 		} catch (err: any) {
 			console.error('❌ Failed to load project:', err)
 			error.value = err.message || 'Failed to load project'
-		} finally {
 			loading.value = false
 		}
+	} else {
+		loading.value = false
 	}
 })
 
@@ -610,7 +618,8 @@ const importMedia = () => {
 }
 
 const startRecording = () => {
-	navigateTo('/recorder')
+	// Pass project ID to recorder
+	navigateTo(`/recorder?project=${projectId}`)
 }
 
 const applyShape = (shape: string) => {

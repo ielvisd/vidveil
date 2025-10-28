@@ -1,8 +1,8 @@
 export default defineAppConfig({
 	app: {
-		name: "Nuxtor",
-		author: "Nicola Spadari",
-		repo: "https://github.com/NicolaSpadari/nuxtor",
+		name: "VidVeil",
+		author: "Elvis Ibarra",
+		repo: "https://github.com/ielvisd/vidveil",
 		tauriSite: "https://tauri.app",
 		nuxtSite: "https://nuxt.com",
 		nuxtUiSite: "https://ui4.nuxt.dev"

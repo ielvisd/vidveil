@@ -16,10 +16,10 @@
 		],
 		"resources": [],
 		"externalBin": [],
-		"copyright": "",
-		"category": "DeveloperTool",
-		"shortDescription": "",
-		"longDescription": "",
+		"copyright": "Copyright © 2025 Elvis Ibarra",
+		"category": "Video",
+		"shortDescription": "AI-Powered Video Editor with PiP Magic",
+		"longDescription": "VidVeil is a desktop video editor that lets you record screen and webcam with custom PiP shapes",
 		"macOS": {},
 		"linux": {
 			"deb": {}
@@ -31,18 +31,18 @@
 		"beforeDevCommand": "bun run dev",
 		"devUrl": "http://localhost:3000"
 	},
-	"productName": "Nuxtor",
-	"version": "1.5.0",
-	"identifier": "com.nicolaspadari.nuxtor",
+	"productName": "VidVeil",
+	"version": "1.0.0",
+	"identifier": "com.elvisibarra.vidveil",
 	"plugins": {},
 	"app": {
 		"windows": [
 			{
-				"title": "Nuxtor",
-				"width": 1366,
-				"height": 768,
-				"minWidth": 375,
-				"minHeight": 812,
+				"title": "VidVeil - AI Video Editor",
+				"width": 1600,
+				"height": 1000,
+				"minWidth": 1280,
+				"minHeight": 720,
 				"resizable": true,
 				"fullscreen": false
 			}

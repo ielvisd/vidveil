@@ -1,7 +1,7 @@
 <template>
 	<UContainer class="home-page">
 		<div class="hero-section">
-			<h1 class="hero-title">ClipForge</h1>
+			<h1 class="hero-title">VidVeil</h1>
 			<p class="hero-subtitle">AI-Powered Video Editor with PiP Magic</p>
 		<div class="cta-buttons">
 			<UButton to="/projects" size="xl" color="primary">

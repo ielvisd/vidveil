@@ -64,3 +64,105 @@ export const getShapeDescription = (shape: PredefinedShape): string => {
 	return SHAPE_LIBRARY[shape]?.description || ''
 }
 
+/**
+ * Generate a canvas Path2D compatible path for a given shape
+ * Used for canvas clipping during export
+ */
+export const getShapePath = (
+	shape: PredefinedShape, 
+	x: number, 
+	y: number, 
+	width: number, 
+	height: number
+): string => {
+	const cx = x + width / 2
+	const cy = y + height / 2
+	const rx = width / 2
+	const ry = height / 2
+
+	switch (shape) {
+		case 'circle':
+			// Circle path
+			return `M ${cx - rx},${cy} A ${rx},${ry} 0 1,0 ${cx + rx},${cy} A ${rx},${ry} 0 1,0 ${cx - rx},${cy} Z`
+		
+		case 'square':
+			// Square path
+			return `M ${x},${y} L ${x + width},${y} L ${x + width},${y + height} L ${x},${y + height} Z`
+		
+		case 'heart':
+			// Heart path (scaled to position)
+			const scale = width / 100
+			return `M ${cx},${y + 20 * scale} 
+				C ${cx},${y + 20 * scale} ${cx - 20 * scale},${y + 5 * scale} ${cx - 30 * scale},${y + 15 * scale} 
+				C ${cx - 40 * scale},${y + 25 * scale} ${cx - 40 * scale},${y + 40 * scale} ${cx - 30 * scale},${y + 50 * scale} 
+				C ${cx - 20 * scale},${y + 60 * scale} ${cx},${y + 80 * scale} ${cx},${y + 80 * scale} 
+				C ${cx},${y + 80 * scale} ${cx + 20 * scale},${y + 60 * scale} ${cx + 30 * scale},${y + 50 * scale} 
+				C ${cx + 40 * scale},${y + 40 * scale} ${cx + 40 * scale},${y + 25 * scale} ${cx + 30 * scale},${y + 15 * scale} 
+				C ${cx + 20 * scale},${y + 5 * scale} ${cx},${y + 20 * scale} ${cx},${y + 20 * scale} Z`
+		
+		case 'star':
+			// 5-pointed star
+			const points = 5
+			const outerRadius = Math.min(rx, ry)
+			const innerRadius = outerRadius * 0.4
+			let starPath = ''
+			for (let i = 0; i < points * 2; i++) {
+				const radius = i % 2 === 0 ? outerRadius : innerRadius
+				const angle = (i * Math.PI) / points - Math.PI / 2
+				const px = cx + radius * Math.cos(angle)
+				const py = cy + radius * Math.sin(angle)
+				starPath += i === 0 ? `M ${px},${py}` : ` L ${px},${py}`
+			}
+			return starPath + ' Z'
+		
+		case 'hex':
+			// Hexagon
+			let hexPath = ''
+			for (let i = 0; i < 6; i++) {
+				const angle = (i * Math.PI) / 3 - Math.PI / 2
+				const px = cx + rx * Math.cos(angle)
+				const py = cy + ry * Math.sin(angle)
+				hexPath += i === 0 ? `M ${px},${py}` : ` L ${px},${py}`
+			}
+			return hexPath + ' Z'
+		
+		case 'diamond':
+			// Diamond (rotated square)
+			return `M ${cx},${y} L ${x + width},${cy} L ${cx},${y + height} L ${x},${cy} Z`
+		
+		case 'triangle':
+			// Triangle
+			return `M ${cx},${y} L ${x + width},${y + height} L ${x},${y + height} Z`
+		
+		case 'pentagon':
+			// Pentagon
+			let pentPath = ''
+			for (let i = 0; i < 5; i++) {
+				const angle = (i * 2 * Math.PI) / 5 - Math.PI / 2
+				const px = cx + rx * Math.cos(angle)
+				const py = cy + ry * Math.sin(angle)
+				pentPath += i === 0 ? `M ${px},${py}` : ` L ${px},${py}`
+			}
+			return pentPath + ' Z'
+		
+		case 'octagon':
+			// Octagon
+			let octPath = ''
+			for (let i = 0; i < 8; i++) {
+				const angle = (i * Math.PI) / 4 - Math.PI / 2
+				const px = cx + rx * Math.cos(angle)
+				const py = cy + ry * Math.sin(angle)
+				octPath += i === 0 ? `M ${px},${py}` : ` L ${px},${py}`
+			}
+			return octPath + ' Z'
+		
+		case 'ellipse':
+			// Ellipse path
+			return `M ${cx - rx},${cy} A ${rx},${ry} 0 1,0 ${cx + rx},${cy} A ${rx},${ry} 0 1,0 ${cx - rx},${cy} Z`
+		
+		default:
+			// Default to circle
+			return `M ${cx - rx},${cy} A ${rx},${ry} 0 1,0 ${cx + rx},${cy} A ${rx},${ry} 0 1,0 ${cx - rx},${cy} Z`
+	}
+}
+

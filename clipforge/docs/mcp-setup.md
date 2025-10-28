@@ -1,8 +1,8 @@
-# MCP Setup Guide for ClipForge
+# MCP Setup Guide for VidVeil
 
 ## Overview
 
-MCP (Model Context Protocol) servers provide context and documentation to AI assistants. For ClipForge development, we'll use MCPs as development aids, not runtime dependencies.
+MCP (Model Context Protocol) servers provide context and documentation to AI assistants. For VidVeil development, we'll use MCPs as development aids, not runtime dependencies.
 
 ## Current MCP Usage
 

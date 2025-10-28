@@ -76,7 +76,7 @@ pub fn create_temp_directory() -> Result<String, String> {
 	use std::env;
 	
 	let temp_dir = env::temp_dir()
-		.join("clipforge")
+		.join("vidveil")
 		.join(format!("recording_{}", 
 			chrono::Utc::now().timestamp()));
 	

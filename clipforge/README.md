@@ -1,10 +1,10 @@
-# ClipForge
+# VidVeil
 
 AI-Powered Desktop Video Editor with PiP Magic 🎬✨
 
 Built with **Tauri + Nuxt 4 + NuxtUI 4** for lightning-fast native performance.
 
-![ClipForge](./docs/clipforge-hero.png)
+![VidVeil](./docs/vidveil-hero.png)
 
 ## 🚀 Features
 
@@ -38,14 +38,17 @@ Built with **Tauri + Nuxt 4 + NuxtUI 4** for lightning-fast native performance.
 ### Prerequisites
 - Node.js >= 23
 - Bun >= 1.2.22
-- Rust (for Tauri desktop builds)
+- **Rust** (REQUIRED for Tauri desktop builds)
+  ```bash
+  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+  ```
 
 ### Setup
 
 1. **Clone the repo**
 ```bash
 git clone https://github.com/ielvisd/vidveil.git
-cd clipforge
+cd vidveil/clipforge
 ```
 
 2. **Install dependencies**
@@ -73,11 +76,47 @@ bun run dev
 bun run tauri:dev
 ```
 
+## ⚠️ Common Setup Issues
+
+### "failed to run 'cargo metadata'" Error
+
+**If you see this error when running `bun run tauri:build` or `bun run tauri:dev`:**
+
+```
+failed to run 'cargo metadata' command to get workspace directory: 
+No such file or directory (os error 2)
+```
+
+**This means Rust is not installed.** VidVeil requires Rust/Cargo for the Tauri desktop framework.
+
+**Solution:**
+
+```bash
+# Install Rust (includes Cargo)
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+
+# Follow the installation prompts (usually just press Enter)
+
+# Reload your shell to update PATH
+source $HOME/.cargo/env
+
+# Verify installation
+cargo --version
+rustc --version
+
+# Now try building again
+bun run tauri:build
+```
+
+**Note:** Rust installation is only required for desktop builds. Browser mode (`bun run dev`) works without Rust.
+
+---
+
 ## 📖 Usage
 
 ### Creating Your First Project
 
-1. **Launch ClipForge** → Click "My Projects"
+1. **Launch VidVeil** → Click "My Projects"
 2. **Sign In** → Use email/password or OAuth (GitHub/Google)
 3. **Create Project** → Click "New Project" and enter a name
 4. **Import Media** → Click "Import Media" or record screen
@@ -98,7 +137,7 @@ The AI will generate the perfect PiP shape!
 ## 🏗️ Project Structure
 
 ```
-clipforge/
+vidveil/clipforge/
 ├── app/
 │   ├── pages/           # Routes
 │   │   ├── projects.vue
@@ -124,16 +163,37 @@ clipforge/
 
 ```bash
 # Development
-bun run dev              # Browser mode
+bun run dev              # Browser mode (http://localhost:3000)
 bun run tauri:dev        # Desktop mode with hot reload
 
 # Build
 bun run generate         # Static site
-bun run tauri:build      # Desktop app
+bun run tauri:build      # Desktop app (.dmg for macOS, .exe for Windows)
+bun run tauri:build:debug # Debug build (faster compilation)
 
 # Code Quality
 bun run lint             # ESLint
 ```
+
+### Building Desktop Application
+
+**macOS Build:**
+```bash
+bun run tauri:build
+```
+Output: `src-tauri/target/release/bundle/dmg/VidVeil_*.dmg`
+
+**Windows Build:**
+```bash
+bun run tauri:build --target x86_64-pc-windows-msvc
+```
+Output: `src-tauri/target/release/bundle/msi/VidVeil_*.msi`
+
+**Requirements:**
+- macOS: Xcode Command Line Tools
+- Windows: Visual Studio Build Tools + WiX Toolset
+
+See `docs/DEVELOPMENT.md` for detailed build instructions.
 
 ### MCP Servers
 

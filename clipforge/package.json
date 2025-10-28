@@ -1,10 +1,10 @@
 {
-	"name": "clipforge",
+	"name": "vidveil",
 	"type": "module",
 	"version": "1.0.0",
 	"private": true,
 	"packageManager": "bun@1.2.22",
-	"description": "AI-Powered Desktop Video Editor with PiP Magic - Built with Tauri, Nuxt 4, and NuxtUI 4",
+	"description": "VidVeil - AI-Powered Desktop Video Editor with PiP Magic - Built with Tauri, Nuxt 4, and NuxtUI 4",
 	"author": "Elvis Ibarra",
 	"license": "MIT",
 	"engines": {

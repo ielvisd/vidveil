@@ -1,5 +1,5 @@
 // IndexedDB wrapper for storing large video files locally
-const DB_NAME = 'clipforge-videos'
+const DB_NAME = 'vidveil-videos'
 const STORE_NAME = 'clips'
 const DB_VERSION = 1
 

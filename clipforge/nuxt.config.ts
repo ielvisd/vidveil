@@ -8,7 +8,7 @@ export default defineNuxtConfig({
 	],
 	app: {
 		head: {
-			title: "ClipForge - AI-Powered Video Editor",
+			title: "VidVeil - AI-Powered Video Editor",
 			charset: "utf-8",
 			viewport: "width=device-width, initial-scale=1",
 			meta: [

@@ -1,4 +1,4 @@
--- ClipForge Supabase Database Schema
+-- VidVeil Supabase Database Schema
 -- Run this in your Supabase SQL editor
 
 -- Enable UUID extension
