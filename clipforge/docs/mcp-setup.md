@@ -2,52 +2,62 @@
 
 ## Overview
 
-MCP (Model Context Protocol) servers provide context and documentation to AI assistants. For VidVeil development, we'll use MCPs as development aids, not runtime dependencies.
+MCP (Model Context Protocol) servers provide context and documentation to AI assistants. For VidVeil development, we use MCPs as development aids to ensure best practices and avoid reinventing patterns.
 
-## Current MCP Usage
+## MCP Servers Configured
 
-Since most MCP servers are not yet available as npm packages, we're using them conceptually in development:
+All 7 MCP servers are now configured in `.cursor/mcp.json`:
 
-1. **nuxt-mcp** - Reference Nuxt 4 documentation via web when needed
-2. **vue-mcp** - Reference Vue 3 and NuxtUI docs when needed  
-3. **context7** - Available via npm
-4. **supabase-mcp** - Reference Supabase docs directly
-5. **vercel-mcp** - Reference Vercel docs directly
-6. **chrome-devtools** - Use browser devtools directly
-7. **playwright-mcp** - Use Playwright CLI directly
+1. **nuxt-mcp** - Nuxt 4 documentation and examples
+2. **vue-mcp** - Vue 3 and NuxtUI component patterns
+3. **context7** - Real-time documentation and examples
+4. **supabase-mcp** - Database operations and queries
+5. **vercel-mcp** - Deployment workflows
+6. **chrome-devtools-mcp** - Browser debugging
+7. **playwright-mcp** - E2E test generation and execution
+
+## Installation
+
+Install all MCP servers globally:
+
+```bash
+npm install -g @modelcontextprotocol/server-nuxt
+npm install -g vite-plugin-vue-mcp
+npm install -g @modelcontextprotocol/server-context7
+npm install -g @modelcontextprotocol/server-playwright
+npm install -g @modelcontextprotocol/server-supabase
+npm install -g @modelcontextprotocol/server-chrome-devtools
+npm install -g @modelcontextprotocol/server-vercel
+```
+
+## Configuration
+
+The `.cursor/mcp.json` file is configured with all servers. Environment variables are required:
+
+```env
+CONTEXT7_API_KEY=your_context7_api_key
+VERCEL_TOKEN=your_vercel_token
+PUBLIC_SUPABASE_URL=your_supabase_url
+PUBLIC_SUPABASE_KEY=your_supabase_key
+```
 
 ## Development Workflow
 
-Instead of relying on external MCP servers, the `.cursorrules` file guides the AI to:
+**MANDATORY:** For every new feature:
 
-1. Use official documentation (Nuxt, Vue, NuxtUI)
-2. Reference Supabase docs for database operations
-3. Use Playwright CLI for testing
-4. Use browser devtools for debugging
-5. Query OpenAI/context7 when AI assistance is needed
+1. **Query MCP first** - Use appropriate MCP server for framework-specific help
+2. **Search codebase** - Understand existing patterns
+3. **Implement** - Follow MCP guidance and existing patterns
+4. **Test** - Validate with automated tests
 
-## Available MCP Tools
+## Usage Guide
 
-The following are actually available:
+See `docs/mcp-usage-guide.md` for detailed usage instructions and example queries for each MCP server.
 
-### Context7
-```bash
-npm install -g context7-mcp
-```
+## Validation
 
-### Playwright (via CLI, not MCP)
-```bash
-npm install -D @playwright/test
-npx playwright test
-```
-
-## Future Setup
-
-When MCP packages become available:
-
-1. Install each MCP server package
-2. Configure in `.cursor/mcp.json`
-3. Set environment variables
-4. Test connections
-
-For now, we follow the same development principles through manual documentation reference and the `.cursorrules` guidance.
+After setup:
+1. Restart Cursor/Claude to load MCP configuration
+2. Test each MCP server responds successfully
+3. Verify environment variables are set
+4. Check `.cursor/mcp.json` exists in project root

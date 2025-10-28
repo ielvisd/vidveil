@@ -20,10 +20,17 @@
 		"tauri": "tauri",
 		"tauri:dev": "tauri dev",
 		"tauri:build": "tauri build",
-		"tauri:build:debug": "tauri build --debug"
+		"tauri:build:debug": "tauri build --debug",
+		"test": "playwright test",
+		"test:ui": "playwright test --ui",
+		"test:debug": "playwright test --debug",
+		"test:headed": "playwright test --headed",
+		"test:report": "playwright show-report",
+		"test:install": "playwright install"
 	},
 	"dependencies": {
 		"@ffmpeg/ffmpeg": "^0.12.15",
+		"@ffmpeg/util": "^0.12.2",
 		"@nuxt/ui": "4.0.0-alpha.2",
 		"@supabase/supabase-js": "^2.76.1",
 		"@tauri-apps/api": "^2.8.0",

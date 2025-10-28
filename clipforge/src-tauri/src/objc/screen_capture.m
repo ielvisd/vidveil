@@ -154,9 +154,32 @@ CaptureResult start_screen_recording_objc(
             // Clear any previous delegate errors
             g_last_recording_error = nil;
             
-            // TEMPORARILY SKIP PERMISSION CHECK - macOS permission cache is buggy
-            // Just proceed and let AVFoundation fail if permission is missing
-            NSLog(@"⏭️ Skipping permission check, will proceed with recording attempt");
+            // Check screen recording permission first
+            NSLog(@"🔍 Checking screen recording permission...");
+            
+            // Request screen recording permission if needed
+            if (@available(macOS 10.15, *)) {
+                // For macOS 10.15+, we need to request permission
+                NSLog(@"📺 Requesting screen recording permission...");
+                
+                // Check if we already have permission
+                CGDisplayStreamRef stream = CGDisplayStreamCreate(display_id, 1, 1, kCVPixelFormatType_32BGRA, nil, ^(CGDisplayStreamFrameStatus status __attribute__((unused)), uint64_t displayTime __attribute__((unused)), IOSurfaceRef frameSurface __attribute__((unused)), CGDisplayStreamUpdateRef updateRef __attribute__((unused))) {
+                    // This callback will only be called if we have permission
+                });
+                
+                if (stream == NULL) {
+                    NSLog(@"❌ No screen recording permission - CGDisplayStreamCreate failed");
+                    strncpy(result.error_message, 
+                        "Screen recording permission not granted. Please check System Settings > Privacy & Security > Screen Recording and ensure VidVeil is enabled.",
+                        sizeof(result.error_message) - 1);
+                    return result;
+                } else {
+                    NSLog(@"✅ Screen recording permission confirmed");
+                    CFRelease(stream);
+                }
+            } else {
+                NSLog(@"📺 macOS version < 10.15, no permission required");
+            }
             
             // Create a FRESH delegate every time
             g_delegate = [[RecordingDelegate alloc] init];
@@ -171,16 +194,28 @@ CaptureResult start_screen_recording_objc(
             
             [g_session beginConfiguration];
             
-            // NOTE: Do NOT set session preset for AVCaptureScreenInput
-            // Screen input doesn't use presets and it can cause issues
+            // Set session preset for screen recording
+            // Use high quality preset for screen recording
+            if ([g_session canSetSessionPreset:AVCaptureSessionPresetHigh]) {
+                [g_session setSessionPreset:AVCaptureSessionPresetHigh];
+                NSLog(@"✅ Session preset set to High");
+            } else {
+                NSLog(@"⚠️ Cannot set session preset to High, using default");
+            }
             
-            // Create screen input
+            // Create screen input with proper error handling
+            NSLog(@"📺 Creating screen input for display ID: %u", display_id);
             AVCaptureScreenInput* screenInput = [[AVCaptureScreenInput alloc] initWithDisplayID:display_id];
             if (screenInput == nil) {
-                strncpy(result.error_message, "Failed to create screen input", sizeof(result.error_message) - 1);
+                NSLog(@"❌ Failed to create screen input - likely permission issue");
+                strncpy(result.error_message, 
+                    "Failed to create screen input. Please check System Settings > Privacy & Security > Screen Recording and ensure VidVeil is enabled. You may need to restart the app after granting permission.",
+                    sizeof(result.error_message) - 1);
                 g_session = nil;  // ARC will deallocate
                 return result;
             }
+            
+            NSLog(@"✅ Screen input created successfully");
             
             // Set screen input properties
             screenInput.capturesCursor = YES;
@@ -189,6 +224,7 @@ CaptureResult start_screen_recording_objc(
             // CRITICAL: Set minimum frame rate for screen capture
             // Without this, AVFoundation may not capture any frames
             screenInput.minFrameDuration = CMTimeMake(1, 30); // 30 fps minimum
+            
             NSLog(@"✅ Screen input configured: cursor=%d, clicks=%d, fps=30", YES, YES);
             
             // Add screen input to session
@@ -243,14 +279,22 @@ CaptureResult start_screen_recording_objc(
                 }
             }
             
-            // Setup webcam recording if requested
+            // Create separate webcam session if requested
             if (include_webcam) {
-                // Create separate webcam session
+                NSLog(@"📷 Creating separate webcam session...");
+                
+                // Create webcam session
                 g_webcam_session = [[AVCaptureSession alloc] init];
                 if (g_webcam_session == nil) {
                     NSLog(@"⚠️ Failed to create webcam session");
                 } else {
                     [g_webcam_session beginConfiguration];
+                    
+                    // Set webcam session preset
+                    if ([g_webcam_session canSetSessionPreset:AVCaptureSessionPresetHigh]) {
+                        [g_webcam_session setSessionPreset:AVCaptureSessionPresetHigh];
+                        NSLog(@"✅ Webcam session preset set to High");
+                    }
                     
                     // Get default camera
                     AVCaptureDevice* camera = [AVCaptureDevice defaultDeviceWithMediaType:AVMediaTypeVideo];
@@ -291,6 +335,8 @@ CaptureResult start_screen_recording_objc(
                         NSLog(@"✅ Webcam session started");
                     }
                 }
+            } else {
+                NSLog(@"📷 Webcam disabled - recording screen only");
             }
             
             // Create movie file output
@@ -354,7 +400,7 @@ CaptureResult start_screen_recording_objc(
                 NSLog(@"📹 About to start recording to: %@", fileURL.path);
             }
             
-            // Start BOTH recordings simultaneously for perfect sync
+            // Start synchronized recordings (screen + webcam)
             NSLog(@"🎬 Starting synchronized recordings...");
             
             // Start screen recording
@@ -426,7 +472,10 @@ CaptureResult stop_screen_recording_objc() {
                 return result;
             }
             
-            // Stop recording
+            // Stop synchronized recordings
+            NSLog(@"🛑 Stopping synchronized recordings...");
+            
+            // Stop screen recording
             [g_output stopRecording];
             
             // Stop webcam recording if active
@@ -435,10 +484,10 @@ CaptureResult stop_screen_recording_objc() {
                 [g_webcam_output stopRecording];
             }
             
-            // Wait longer for file to finalize (AVFoundation needs time to write)
+            // Wait longer for files to finalize (AVFoundation needs time to write)
             [NSThread sleepForTimeInterval:2.0];
             
-            // Stop session
+            // Stop sessions
             [g_session stopRunning];
             
             // Stop webcam session if active
@@ -453,6 +502,7 @@ CaptureResult stop_screen_recording_objc() {
             // Clear references (ARC handles deallocation)
             g_output = nil;
             g_session = nil;
+            g_delegate = nil;
             g_webcam_output = nil;
             g_webcam_session = nil;
             g_webcam_delegate = nil;

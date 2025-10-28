@@ -301,8 +301,15 @@ export const useScreenCapture = () => {
 					console.log('✅ Native recording saved to disk:', outputPath)
 					console.log('📁 File location: ~/Movies/VidVeil/')
 					
-					// Create blob URLs for preview/playback from the files
+					// Create blob URLs for preview/playback from separate recording files
 					try {
+						// Wait a bit for the files to be fully written
+						console.log('⏳ Waiting for files to be written...')
+						await new Promise(resolve => setTimeout(resolve, 2000))
+						
+						// Check if screen recording file exists
+						console.log('🔍 Checking if screen file exists:', outputPath)
+						
 						// Read screen recording
 						const fileBytes = await invoke('read_video_file', { filePath: outputPath }) as number[]
 						const blob = new Blob([new Uint8Array(fileBytes)], { type: 'video/mp4' })
@@ -310,11 +317,12 @@ export const useScreenCapture = () => {
 						recordedScreenBlob.value = blob
 						recordedScreenBlobUrl.value = URL.createObjectURL(blob)
 						
-						console.log('📹 Screen blob size:', (blob.size / 1024 / 1024).toFixed(2), 'MB')
+						console.log('📹 Screen recording blob size:', (blob.size / 1024 / 1024).toFixed(2), 'MB')
 						
 						// Try to read webcam recording if it exists
 						const webcamPath = outputPath.replace('.mp4', '-webcam.mp4')
 						try {
+							console.log('🔍 Checking if webcam file exists:', webcamPath)
 							const webcamBytes = await invoke('read_video_file', { filePath: webcamPath }) as number[]
 							const webcamBlob = new Blob([new Uint8Array(webcamBytes)], { type: 'video/mp4' })
 							
@@ -330,10 +338,19 @@ export const useScreenCapture = () => {
 						}
 						
 						console.log('✅ Recording ready for preview')
+						
 					} catch (err: any) {
 						console.error('Failed to create preview:', err)
 						// Don't throw - the file still exists on disk even if preview fails
 						console.warn('⚠️ Preview failed but recording is saved to:', outputPath)
+						
+						// Try to check if file exists using file system
+						try {
+							const fileInfo = await invoke('get_file_info', { filePath: outputPath })
+							console.log('📁 File info:', fileInfo)
+						} catch (fsErr) {
+							console.error('File system check failed:', fsErr)
+						}
 					}
 				}
 				
