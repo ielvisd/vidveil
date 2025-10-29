@@ -282,7 +282,28 @@ AVMutableVideoComposition* create_pip_composition(
             return nil;
         }
         
-        AVAssetTrack* screenVideoTrack = firstSegment.sourceTrack;
+        // Get source URL and track ID from segment, then load the asset to get track dimensions
+        NSURL* sourceURL = firstSegment.sourceURL;
+        CMPersistentTrackID sourceTrackID = firstSegment.sourceTrackID;
+        
+        if (sourceURL == nil) {
+            NSLog(@"❌ Screen track segment has no source URL");
+            return nil;
+        }
+        
+        AVAsset* sourceAsset = [AVAsset assetWithURL:sourceURL];
+        if (sourceAsset == nil) {
+            NSLog(@"❌ Failed to load source asset from segment");
+            return nil;
+        }
+        
+        AVAssetTrack* screenVideoTrack = [sourceAsset trackWithTrackID:sourceTrackID];
+        if (screenVideoTrack == nil) {
+            // Fallback: get first video track if track ID lookup fails
+            NSArray<AVAssetTrack*>* videoTracks = [sourceAsset tracksWithMediaType:AVMediaTypeVideo];
+            screenVideoTrack = videoTracks.firstObject;
+        }
+        
         if (screenVideoTrack == nil) {
             NSLog(@"❌ No source track found in screen track segment");
             return nil;
@@ -344,9 +365,24 @@ AVMutableVideoComposition* create_pip_composition(
             CGSize webcamSize = renderSize; // Default fallback
             if (webcamTrack.segments.count > 0) {
                 AVCompositionTrackSegment* firstWebcamSegment = webcamTrack.segments.firstObject;
-                if (firstWebcamSegment != nil && firstWebcamSegment.sourceTrack != nil) {
-                    webcamSize = firstWebcamSegment.sourceTrack.naturalSize;
-                    NSLog(@"📹 Webcam source size: %.0fx%.0f", webcamSize.width, webcamSize.height);
+                if (firstWebcamSegment != nil && firstWebcamSegment.sourceURL != nil) {
+                    NSURL* webcamSourceURL = firstWebcamSegment.sourceURL;
+                    CMPersistentTrackID webcamTrackID = firstWebcamSegment.sourceTrackID;
+                    
+                    AVAsset* webcamSourceAsset = [AVAsset assetWithURL:webcamSourceURL];
+                    if (webcamSourceAsset != nil) {
+                        AVAssetTrack* webcamVideoTrack = [webcamSourceAsset trackWithTrackID:webcamTrackID];
+                        if (webcamVideoTrack == nil) {
+                            // Fallback: get first video track
+                            NSArray<AVAssetTrack*>* webcamVideoTracks = [webcamSourceAsset tracksWithMediaType:AVMediaTypeVideo];
+                            webcamVideoTrack = webcamVideoTracks.firstObject;
+                        }
+                        
+                        if (webcamVideoTrack != nil) {
+                            webcamSize = webcamVideoTrack.naturalSize;
+                            NSLog(@"📹 Webcam source size: %.0fx%.0f", webcamSize.width, webcamSize.height);
+                        }
+                    }
                 }
             }
             
