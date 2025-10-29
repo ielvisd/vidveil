@@ -4,10 +4,11 @@ fn main() {
     {
         cc::Build::new()
             .file("src/objc/screen_capture.m")
+            .file("src/objc/video_export.m")
             .flag("-fmodules")
             .flag("-fobjc-arc")
             .flag("-mmacosx-version-min=10.15")
-            .compile("screen_capture_objc");
+            .compile("native_video_objc");
         
         // Link frameworks
         println!("cargo:rustc-link-lib=framework=AVFoundation");
@@ -16,8 +17,9 @@ fn main() {
         println!("cargo:rustc-link-lib=framework=CoreGraphics");
         println!("cargo:rustc-link-lib=framework=Foundation");
         
-        // Tell cargo to rerun if the Objective-C file changes
+        // Tell cargo to rerun if the Objective-C files change
         println!("cargo:rerun-if-changed=src/objc/screen_capture.m");
+        println!("cargo:rerun-if-changed=src/objc/video_export.m");
     }
     
     tauri_build::build()

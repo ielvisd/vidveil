@@ -296,12 +296,28 @@ CaptureResult start_screen_recording_objc(
                         NSLog(@"✅ Webcam session preset set to High");
                     }
                     
-                    // Get default camera
-                    AVCaptureDevice* camera = [AVCaptureDevice defaultDeviceWithMediaType:AVMediaTypeVideo];
+                    // Get front-facing camera specifically (not default which might be screen)
+                    AVCaptureDeviceDiscoverySession* cameraSession = 
+                        [AVCaptureDeviceDiscoverySession discoverySessionWithDeviceTypes:@[AVCaptureDeviceTypeBuiltInWideAngleCamera]
+                                                                               mediaType:AVMediaTypeVideo
+                                                                                position:AVCaptureDevicePositionFront];
+                    AVCaptureDevice* camera = cameraSession.devices.firstObject;
+                    
+                    // Fallback to any camera if front camera not available
+                    if (camera == nil) {
+                        NSLog(@"⚠️ No front camera found, trying any camera");
+                        cameraSession = 
+                            [AVCaptureDeviceDiscoverySession discoverySessionWithDeviceTypes:@[AVCaptureDeviceTypeBuiltInWideAngleCamera]
+                                                                                   mediaType:AVMediaTypeVideo
+                                                                                    position:AVCaptureDevicePositionUnspecified];
+                        camera = cameraSession.devices.firstObject;
+                    }
+                    
                     if (camera == nil) {
                         NSLog(@"⚠️ No camera device found");
                         g_webcam_session = nil;
                     } else {
+                        NSLog(@"📷 Using camera: %@", camera.localizedName);
                         // Create camera input
                         NSError* cameraError = nil;
                         g_webcam_input = [[AVCaptureDeviceInput alloc] initWithDevice:camera error:&cameraError];

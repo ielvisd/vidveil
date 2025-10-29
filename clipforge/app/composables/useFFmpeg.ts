@@ -25,7 +25,7 @@ export const useFFmpeg = () => {
   const isReady = computed(() => isLoaded.value && ffmpeg.value !== null)
 
   /**
-   * Initialize FFmpeg WASM
+   * Initialize FFmpeg WASM with multiple fallback strategies
    */
   const loadFFmpeg = async () => {
     if (isLoaded.value) return
@@ -33,41 +33,75 @@ export const useFFmpeg = () => {
     isLoading.value = true
     error.value = null
 
-    try {
-      const ffmpegInstance = new FFmpeg()
-      
-      // Set up progress callback
-      ffmpegInstance.on('progress', ({ progress: prog, time, speed }) => {
-        progress.value = {
-          progress: Math.round(prog * 100),
-          time,
-          speed: `${speed}x`
+    const strategies = [
+      // Strategy 1: Local files
+      async () => {
+        console.log('🔄 Loading FFmpeg from local files...')
+        const baseURL = '/ffmpeg'
+        return {
+          coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
+          wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
         }
-      })
+      },
+      // Strategy 2: CDN with compatible version
+      async () => {
+        console.log('🔄 Loading FFmpeg from CDN (v0.12.2)...')
+        const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.2/dist/esm'
+        return {
+          coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
+          wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
+        }
+      }
+    ]
 
-      // Set up log callback for debugging
-      ffmpegInstance.on('log', ({ message }) => {
-        console.log('FFmpeg:', message)
-      })
+    for (let i = 0; i < strategies.length; i++) {
+      try {
+        console.log(`🔄 Trying FFmpeg loading strategy ${i + 1}...`)
+        
+        // Create fresh FFmpeg instance
+        ffmpeg.value = new FFmpeg()
+        
+        // Get URLs for this strategy
+        const urls = await strategies[i]()
+        
+        // Load FFmpeg with minimal configuration
+        await ffmpeg.value.load(urls)
 
-      // Load FFmpeg WASM from CDN
-      const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd'
-      
-      await ffmpegInstance.load({
-        coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
-        wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
-      })
+        // Set up event handlers AFTER successful loading
+        try {
+          ffmpeg.value.on('progress', ({ progress: p, time }) => {
+            progress.value = {
+              progress: Math.round(p * 100),
+              time,
+              speed: '1x'
+            }
+            console.log(`FFmpeg progress: ${progress.value.progress}%`)
+          })
 
-      ffmpeg.value = ffmpegInstance
-      isLoaded.value = true
-      
-      console.log('✅ FFmpeg WASM loaded successfully')
-    } catch (err: any) {
-      console.error('❌ Failed to load FFmpeg WASM:', err)
-      error.value = err.message || 'Failed to load FFmpeg'
-      throw err
-    } finally {
-      isLoading.value = false
+          ffmpeg.value.on('log', ({ message }) => {
+            console.log('FFmpeg:', message)
+          })
+        } catch (eventError) {
+          console.warn('⚠️ Could not set up FFmpeg event handlers:', eventError)
+          // Continue without event handlers - FFmpeg will still work
+        }
+
+        isLoaded.value = true
+        console.log(`✅ FFmpeg loaded successfully with strategy ${i + 1}`)
+        return
+
+      } catch (err: any) {
+        console.warn(`⚠️ Strategy ${i + 1} failed:`, err.message)
+        
+        // Reset state for next attempt
+        ffmpeg.value = null
+        isLoaded.value = false
+        
+        // If this was the last strategy, throw the error
+        if (i === strategies.length - 1) {
+          throw err
+        }
+      }
     }
   }
 
@@ -90,8 +124,18 @@ export const useFFmpeg = () => {
     await ensureLoaded()
     
     try {
-      const fileData = await fetchFile(data)
-      await ffmpeg.value!.writeFile(filename, fileData)
+      let fileData: Uint8Array;
+      
+      if (data instanceof ArrayBuffer || data instanceof Uint8Array) {
+        // Convert to Blob for fetchFile
+        const blob = new Blob([data]);
+        fileData = await fetchFile(blob) as Uint8Array;
+      } else {
+        // File or Blob
+        fileData = await fetchFile(data) as Uint8Array;
+      }
+      
+      await ffmpeg.value!.writeFile(filename, fileData);
     } catch (err: any) {
       console.error(`Failed to write file ${filename}:`, err)
       throw err
@@ -144,7 +188,7 @@ export const useFFmpeg = () => {
   /**
    * List files in FFmpeg virtual filesystem
    */
-  const listDir = async (path: string = '/'): Promise<string[]> => {
+  const listDir = async (path: string = '/'): Promise<any[]> => {
     await ensureLoaded()
     
     try {
@@ -159,8 +203,8 @@ export const useFFmpeg = () => {
    * Create a blob URL from file data
    */
   const createBlobURL = async (filename: string, mimeType: string = 'video/mp4'): Promise<string> => {
-    const data = await readFile(filename)
-    const blob = new Blob([data], { type: mimeType })
+    const data = await readFile(filename) as Uint8Array;
+    const blob = new Blob([data.buffer as ArrayBuffer], { type: mimeType })
     return URL.createObjectURL(blob)
   }
 
@@ -168,8 +212,8 @@ export const useFFmpeg = () => {
    * Download file as blob
    */
   const downloadFile = async (filename: string, mimeType: string = 'video/mp4'): Promise<Blob> => {
-    const data = await readFile(filename)
-    return new Blob([data], { type: mimeType })
+    const data = await readFile(filename) as Uint8Array;
+    return new Blob([data.buffer as ArrayBuffer], { type: mimeType })
   }
 
   /**

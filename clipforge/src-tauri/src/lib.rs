@@ -6,6 +6,8 @@
 // 	tray::TrayIconBuilder
 // };
 
+// Removed unused imports: Window, PhysicalSize
+
 pub mod commands;
 
 pub fn run() {
@@ -25,6 +27,13 @@ pub fn run() {
             crate::commands::screen_capture::start_screen_recording,
             crate::commands::screen_capture::stop_screen_recording,
             crate::commands::screen_capture::is_recording,
+			crate::commands::window::force_resize,
+			crate::commands::video_processing::check_native_export_availability,
+			crate::commands::video_processing::export_video_native,
+			crate::commands::video_processing::get_export_progress,
+			crate::commands::video_processing::cancel_export,
+			crate::commands::video_processing::get_video_info,
+			crate::commands::video_processing::save_blob_to_temp_file
 		])
 		// Tray icon setup removed - can be added back later with tray-icon feature
 		// .setup(|app| {

@@ -11,8 +11,8 @@
 			:src="webcamClip.src"
 			class="webcam-video"
 			:style="videoStyle"
-			autoplay
-			loop
+			:autoplay="false"
+			:loop="false"
 			muted
 		/>
 		<div class="pip-controls">
@@ -31,6 +31,8 @@ const props = defineProps<{
 	pipConfig: any
 	containerWidth: number
 	containerHeight: number
+	isPlaying?: boolean
+	currentTime?: number
 }>()
 
 const emit = defineEmits<{
@@ -47,11 +49,12 @@ const overlayStyle = computed(() => {
 	
 	const { x, y, width, height } = props.pipConfig
 	
+	// Use straightforward absolute positioning (x, y are pixels from top-left)
 	return {
-		left: `${x}%`,
-		top: `${y}%`,
-		width: `${width}%`,
-		height: `${height}%`
+		left: `${x}px`,
+		top: `${y}px`,
+		width: `${width}px`,
+		height: `${height}px`
 	}
 })
 
@@ -99,14 +102,21 @@ const startDrag = (e: MouseEvent) => {
 }
 
 const onDrag = (e: MouseEvent) => {
-	if (!isDragging.value) return
+	if (!isDragging.value || !props.pipConfig) return
 	
-	const x = ((e.clientX - dragOffset.value.x) / props.containerWidth) * 100
-	const y = ((e.clientY - dragOffset.value.y) / props.containerHeight) * 100
+	// Get the video container's position to calculate relative coordinates
+	const container = document.querySelector('.video-wrapper')
+	if (!container) return
 	
-	// Clamp to container bounds
-	const clampedX = Math.max(0, Math.min(x, 100 - props.pipConfig.width))
-	const clampedY = Math.max(0, Math.min(y, 100 - props.pipConfig.height))
+	const containerRect = container.getBoundingClientRect()
+	
+	// Calculate new position in pixels relative to container
+	let x = e.clientX - containerRect.left - dragOffset.value.x
+	let y = e.clientY - containerRect.top - dragOffset.value.y
+	
+	// Clamp to container bounds (in pixels)
+	const clampedX = Math.max(0, Math.min(x, containerRect.width - props.pipConfig.width))
+	const clampedY = Math.max(0, Math.min(y, containerRect.height - props.pipConfig.height))
 	
 	emit('updatePosition', clampedX, clampedY)
 }
@@ -121,6 +131,23 @@ onUnmounted(() => {
 	window.removeEventListener('mousemove', onDrag)
 	window.removeEventListener('mouseup', stopDrag)
 })
+
+// Sync webcam video with main video playback
+watch(() => props.isPlaying, (isPlaying) => {
+	if (webcamVideo.value) {
+		if (isPlaying) {
+			webcamVideo.value.play()
+		} else {
+			webcamVideo.value.pause()
+		}
+	}
+})
+
+watch(() => props.currentTime, (currentTime) => {
+	if (webcamVideo.value && typeof currentTime === 'number') {
+		webcamVideo.value.currentTime = currentTime
+	}
+})
 </script>
 
 <style scoped>
@@ -129,6 +156,11 @@ onUnmounted(() => {
 	cursor: move;
 	transition: box-shadow 0.2s;
 	z-index: 10;
+	box-sizing: border-box; /* Include padding/border in width */
+	
+	/* DEBUG BORDERS */
+	border: 5px solid orange !important;
+	background: rgba(255, 165, 0, 0.3) !important; /* Semi-transparent orange background to see if it exists */
 }
 
 .pip-overlay:hover {

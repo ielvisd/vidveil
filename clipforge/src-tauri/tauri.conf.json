@@ -1,7 +1,7 @@
 {
 	"bundle": {
 		"active": true,
-		"targets": "all",
+		"targets": ["app"],
 		"windows": {
 			"certificateThumbprint": null,
 			"digestAlgorithm": "sha256",
@@ -34,7 +34,7 @@
 	},
 	"build": {
 		"beforeBuildCommand": "bun run generate",
-		"frontendDist": "../dist",
+		"frontendDist": "../.output/public",
 		"beforeDevCommand": "bun run dev",
 		"devUrl": "http://localhost:3000"
 	},

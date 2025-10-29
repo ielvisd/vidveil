@@ -2,7 +2,8 @@
 	"compilerOptions": {
 		"composite": true,
 		"target": "ESNext",
-		"module": "ESNext"
+		"module": "ESNext",
+		"types": []
 	},
 	"references": [
 		{

@@ -2267,6 +2267,7 @@ dependencies = [
  "objc",
  "objc-foundation",
  "objc_id",
+ "regex",
  "serde",
  "serde_json",
  "tauri",

@@ -1,5 +1,13 @@
 <template>
 	<div class="project-editor">
+		<!-- Authentication Loading -->
+		<div v-if="authLoading" class="loading-screen">
+			<div class="loading-content">
+				<LoadingSpinner />
+				<p>Checking authentication...</p>
+			</div>
+		</div>
+
 		<!-- Error Toast -->
 		<div v-if="error" class="error-toast">
 			<div class="error-content">
@@ -62,7 +70,7 @@
 						<h3>Media Library</h3>
 					</template>
 					<div v-if="loading" class="loading-state">
-						<SharedLoadingSpinner size="sm" message="Loading clips..." />
+						<LoadingSpinner size="sm" message="Loading clips..." />
 					</div>
 					<div v-else-if="clips.length === 0" class="empty-state">
 						<p>No clips yet</p>
@@ -166,6 +174,8 @@
 						:pip-config="pipConfig"
 						:container-width="containerWidth"
 						:container-height="containerHeight"
+						:is-playing="isPlaying"
+						:current-time="currentTime"
 						@remove="removePip"
 						@update-position="updatePipPosition"
 					/>
@@ -246,6 +256,10 @@
 			<div class="timeline-container">
 				<div class="timeline-header">
 					<h3>Timeline</h3>
+					<div class="timeline-info">
+						<span class="total-duration">Total: {{ formatDuration(totalDuration) }}</span>
+						<span class="clip-count-badge">{{ clips.length }} clips</span>
+					</div>
 					<div class="timeline-controls">
 						<UButton 
 							@click="() => setZoom(0.5)"
@@ -317,16 +331,28 @@
 								<TimelinePlayheadIndicator :playhead-position="playheadPixels" />
 
 								<!-- Clips -->
-								<div 
-									v-for="clip in clips" 
-									:key="clip.id"
-									class="timeline-clip"
-									:class="{ selected: selectedClip?.id === clip.id }"
-									:style="getClipStyle(clip)"
-									@click.stop="selectClip(clip)"
-								>
-									<span class="clip-label">{{ clip.name }}</span>
-								</div>
+								<template v-for="(clip, index) in sortedClips" :key="clip.id">
+									<div 
+										class="timeline-clip"
+										:class="{ 
+											selected: selectedClip?.id === clip.id, 
+											dragging: draggingClipId === clip.id,
+											'drop-target': dropTargetIndex === index
+										}"
+										:style="getClipStyle(clip, index)"
+										:draggable="true"
+										style="display: block !important; visibility: visible !important; opacity: 1 !important;"
+										@dragstart="handleDragStart($event, clip, index)"
+										@dragend="handleDragEnd"
+										@dragover.prevent="handleDragOver($event, index)"
+										@drop="handleDrop($event, index)"
+										@click.stop="selectClip(clip)"
+									>
+										<span class="clip-label">{{ clip.name }}</span>
+										<span class="clip-duration-badge">{{ formatDuration(clip.duration) }}</span>
+									</div>
+								</template>
+								
 							</div>
 						</div>
 					</div>
@@ -334,27 +360,35 @@
 			</div>
 		</div>
 
-		<!-- Export Dialog -->
+	</div>
+
+	<!-- Export Dialog - rendered outside main container to avoid clipping -->
+	<Teleport to="body">
 		<ExportDialog
 			v-if="showExportDialog"
 			:clips="clips"
 			:project-name="project?.name"
 			@close="showExportDialog = false"
 		/>
-	</div>
+	</Teleport>
 </template>
 
 <script setup lang="ts">
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
+import LoadingSpinner from '~/components/shared/LoadingSpinner.vue'
+
 const route = useRoute()
 const routeParamId = 'id' in route.params ? route.params.id : ''
 const projectId = (typeof routeParamId === 'string' ? routeParamId : Array.isArray(routeParamId) ? routeParamId[0] : '') as string
 
 const { currentProject, selectProject } = useProject()
-const { clips, addClip, fetchClips, loading: clipsLoading } = useClips()
+const { clips, addClip, fetchClips, loading: clipsLoading, reorderClips } = useClips()
 const { isExporting, exportProgress, exportVideo } = useExport()
 const { currentTime, duration, isPlaying, togglePlay, seek, formatTime, setPlayheadPosition, initializePlayer } = usePlayer()
 const { zoomLevel, zoomIn, zoomOut, setZoom } = useTimeline()
 const { pipConfig, webcamClipId, applyShape: applyPipShape, updatePosition, removePip: removePipShape, setWebcamClip } = usePipShape()
+const { updateClipTimeline } = useClipArrangement()
+const { isAuthenticated, loading: authLoading, checkSession } = useAuth()
 
 const selectedClip = ref<any>(null)
 const activeClip = ref<any>(null)
@@ -363,6 +397,7 @@ const project = ref<any>(null)
 const videoPlayer = ref<HTMLVideoElement | null>(null)
 const videoContainer = ref<HTMLDivElement | null>(null)
 const trackContainer = ref<HTMLDivElement | null>(null)
+const timelineClips = ref<HTMLDivElement[]>([])
 const isMuted = ref(false)
 const volume = ref(100)
 const loading = ref(true)
@@ -371,10 +406,43 @@ const containerWidth = ref(0)
 const containerHeight = ref(0)
 const showExportDialog = ref(false)
 
+// Drag and drop state
+const draggingClipId = ref<string | null>(null)
+const dragSourceIndex = ref<number | null>(null)
+const dropTargetIndex = ref<number | null>(null)
+
 const canExport = computed(() => clips.value.length > 0)
 const shapes = ['circle', 'square', 'heart', 'star', 'hexagon', 'rounded']
 
-const pixelsPerSecond = computed(() => 50 * zoomLevel.value)
+const pixelsPerSecond = computed(() => 100 * zoomLevel.value) // Increased from 50 to 100
+
+// Sort clips by timeline position (start_time or order metadata)
+const sortedClips = computed(() => {
+	if (clips.value.length === 0) {
+		console.log('📊 Timeline: No clips to sort')
+		return []
+	}
+	
+	const sorted = [...clips.value].sort((a, b) => {
+		const aPos = a.metadata?.order ?? a.start_time ?? 0
+		const bPos = b.metadata?.order ?? b.start_time ?? 0
+		return aPos - bPos
+	})
+	
+	console.log(`📊 Timeline: ${sorted.length} clips sorted`, sorted.map(c => ({ 
+		name: c.name, 
+		duration: c.duration,
+		src: c.src?.substring(0, 50) + '...'
+	})))
+	
+	// Return stable references to prevent unnecessary re-renders
+	return sorted
+})
+
+// Total duration of all clips
+const totalDuration = computed(() => {
+	return sortedClips.value.reduce((sum, clip) => sum + clip.duration, 0)
+})
 
 // Playhead position in pixels for the timeline
 const playheadPixels = computed(() => {
@@ -510,10 +578,44 @@ const handleKeyPress = (event: KeyboardEvent) => {
 			event.preventDefault()
 			goToStart()
 			break
+		case 'Delete':
+		case 'Backspace':
+			if (selectedClip.value) {
+				event.preventDefault()
+				removeClip()
+			}
+			break
+		case 'ArrowUp':
+			if (selectedClip.value) {
+				event.preventDefault()
+				moveClipUp()
+			}
+			break
+		case 'ArrowDown':
+			if (selectedClip.value) {
+				event.preventDefault()
+				moveClipDown()
+			}
+			break
 	}
 }
 
 onMounted(async () => {
+	// Wait for authentication to be ready
+	console.log('🔐 Checking authentication...')
+	await checkSession()
+	
+	// Wait a bit more for auth state to settle
+	await new Promise(resolve => setTimeout(resolve, 100))
+	
+	if (!isAuthenticated.value) {
+		console.error('❌ Not authenticated, redirecting to login')
+		await navigateTo('/login')
+		return
+	}
+	
+	console.log('✅ Authentication confirmed, loading project...')
+
 	// Listen for recordings from recorder window (Tauri multi-window)
 	if (typeof window !== 'undefined' && '__TAURI__' in window) {
 		const { listenForRecordings, base64ToBlob } = useRecorderBridge()
@@ -641,6 +743,22 @@ onMounted(async () => {
 	}
 })
 
+// Watch for clip changes and log visibility
+watch(sortedClips, (newClips) => {
+	console.log(`🔄 Clips changed: ${newClips.length} clips`)
+	if (newClips.length > 0) {
+		// Use nextTick to ensure DOM is updated
+		nextTick(() => {
+			const clipElements = document.querySelectorAll('.timeline-clip')
+			console.log(`🎯 Found ${clipElements.length} clip elements in DOM`)
+			clipElements.forEach((el, index) => {
+				const rect = el.getBoundingClientRect()
+				console.log(`📐 Clip ${index}: visible=${rect.width > 0 && rect.height > 0}, pos=(${rect.left}, ${rect.top}), size=(${rect.width}x${rect.height})`)
+			})
+		})
+	}
+}, { immediate: true })
+
 onUnmounted(() => {
 	window.removeEventListener('keydown', handleKeyPress)
 	window.removeEventListener('resize', updateContainerSize)
@@ -653,14 +771,28 @@ const formatDuration = (seconds: number | undefined): string => {
 	return `${mins}:${secs.toString().padStart(2, '0')}`
 }
 
-const getClipStyle = (clip: any) => {
-	const start = clip.start_time || 0
-	const duration = clip.duration || 10
-	
-	return {
-		left: `${start * pixelsPerSecond.value}px`,
-		width: `${duration * pixelsPerSecond.value}px`
+const getClipStyle = (clip: any, index: number) => {
+	// Calculate position based on timeline order (seamless stitching)
+	let startTime = 0
+	for (let i = 0; i < index; i++) {
+		const prevClip = sortedClips.value[i]
+		if (prevClip) {
+			startTime += prevClip.duration
+		}
 	}
+	
+	const duration = clip.duration || 10
+	const widthPixels = Math.max(duration * pixelsPerSecond.value, 80) // Minimum 80px width
+	
+	const style = {
+		left: `${startTime * pixelsPerSecond.value}px`,
+		top: '10px', // EXPLICIT positioning to prevent parent offset issues
+		width: `${widthPixels}px`,
+	}
+	
+	console.log(`🎨 Clip[${index}] style:`, style)
+	
+	return style
 }
 
 const handleTimelineClick = (event: MouseEvent) => {
@@ -671,6 +803,43 @@ const handleTimelineClick = (event: MouseEvent) => {
 	const time = x / pixelsPerSecond.value
 	
 	seek(Math.max(0, Math.min(time, duration.value)))
+}
+
+// Drag and drop handlers
+const handleDragStart = (event: DragEvent, clip: any, index: number) => {
+	draggingClipId.value = clip.id
+	dragSourceIndex.value = index
+	event.dataTransfer!.effectAllowed = 'move'
+	event.dataTransfer!.setData('text/plain', clip.id)
+}
+
+const handleDragOver = (event: DragEvent, index: number) => {
+	event.preventDefault()
+	dropTargetIndex.value = index
+}
+
+const handleDrop = async (event: DragEvent, targetIndex: number) => {
+	event.preventDefault()
+	if (dragSourceIndex.value === null || dragSourceIndex.value === targetIndex) return
+	
+	// Reorder clips array
+	const newOrder = [...sortedClips.value]
+	const [movedClip] = newOrder.splice(dragSourceIndex.value, 1)
+	if (movedClip) {
+		newOrder.splice(targetIndex, 0, movedClip)
+	}
+	
+	// Update order metadata in database
+	await reorderClips(newOrder)
+	
+	// Recalculate start times with snapping
+	await updateClipTimeline(newOrder)
+}
+
+const handleDragEnd = () => {
+	draggingClipId.value = null
+	dragSourceIndex.value = null
+	dropTargetIndex.value = null
 }
 
 const importMedia = () => {
@@ -700,6 +869,39 @@ const removeClip = async () => {
 	activeClip.value = null
 }
 
+// Keyboard shortcut functions for clip management
+const moveClipUp = async () => {
+	if (!selectedClip.value) return
+	
+	const currentIndex = sortedClips.value.findIndex(c => c.id === selectedClip.value.id)
+	if (currentIndex > 0) {
+		const newOrder = [...sortedClips.value]
+		const [movedClip] = newOrder.splice(currentIndex, 1)
+		if (movedClip) {
+			newOrder.splice(currentIndex - 1, 0, movedClip)
+		}
+		
+		await reorderClips(newOrder)
+		await updateClipTimeline(newOrder)
+	}
+}
+
+const moveClipDown = async () => {
+	if (!selectedClip.value) return
+	
+	const currentIndex = sortedClips.value.findIndex(c => c.id === selectedClip.value.id)
+	if (currentIndex < sortedClips.value.length - 1) {
+		const newOrder = [...sortedClips.value]
+		const [movedClip] = newOrder.splice(currentIndex, 1)
+		if (movedClip) {
+			newOrder.splice(currentIndex + 1, 0, movedClip)
+		}
+		
+		await reorderClips(newOrder)
+		await updateClipTimeline(newOrder)
+	}
+}
+
 const handleExport = () => {
 	if (!canExport.value) return
 	showExportDialog.value = true
@@ -713,6 +915,44 @@ const handleExport = () => {
 	height: 100vh;
 	background-color: rgb(17 24 39);
 	color: white;
+}
+
+.loading-screen {
+	position: fixed;
+	top: 0;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	background-color: rgb(17 24 39);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	z-index: 9999;
+}
+
+.loading-content {
+	text-align: center;
+	color: white;
+}
+
+.debug-clips {
+	position: absolute;
+	top: 5px;
+	left: 5px;
+	background: rgba(0, 255, 0, 0.8);
+	color: white;
+	padding: 0.25rem 0.5rem;
+	border-radius: 0.25rem;
+	font-size: 0.75rem;
+	z-index: 1000;
+}
+
+.debug-clip-info {
+	font-size: 0.7rem;
+	margin-top: 0.25rem;
+	background: rgba(0, 0, 0, 0.3);
+	padding: 0.125rem 0.25rem;
+	border-radius: 0.125rem;
 }
 
 /* Top Bar */
@@ -751,16 +991,16 @@ const handleExport = () => {
 /* Main Layout */
 .editor-layout {
 	display: grid;
-	grid-template-columns: 280px 1fr;
-	grid-template-rows: 1fr 240px;
-	gap: 0;
+	grid-template-columns: 300px 1fr;
+	grid-template-rows: 1fr auto;
 	height: calc(100vh - 60px);
 	overflow: hidden;
 }
 
 /* Left Sidebar */
 .left-sidebar {
-	grid-row: 1 / 3;
+	grid-column: 1;
+	grid-row: 1;
 	background-color: rgb(31 41 55);
 	border-right: 1px solid rgb(55 65 81);
 	overflow-y: auto;
@@ -1023,6 +1263,8 @@ const handleExport = () => {
 
 /* Center Preview */
 .center-preview {
+	grid-column: 2;
+	grid-row: 1;
 	display: flex;
 	flex-direction: column;
 	background-color: rgb(17 24 39);
@@ -1035,6 +1277,9 @@ const handleExport = () => {
 	justify-content: center;
 	padding: 2rem;
 	position: relative;
+	max-width: 100%;
+	overflow: hidden;
+	box-sizing: border-box;
 }
 
 .empty-preview {
@@ -1058,6 +1303,7 @@ const handleExport = () => {
 	max-width: 100%;
 	max-height: 100%;
 	width: 100%;
+	box-sizing: border-box;
 	height: 100%;
 	display: flex;
 	align-items: center;
@@ -1070,6 +1316,7 @@ const handleExport = () => {
 	width: auto;
 	height: auto;
 	border-radius: 0.5rem;
+	box-sizing: border-box;
 	box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.4);
 	display: block;
 }
@@ -1161,12 +1408,17 @@ const handleExport = () => {
 
 /* Timeline */
 .timeline-container {
-	grid-column: 2;
+	grid-column: 1 / -1;
+	grid-row: 2;
 	background-color: rgb(31 41 55);
 	border-top: 1px solid rgb(55 65 81);
 	display: flex;
 	flex-direction: column;
-	overflow: hidden;
+	overflow-x: auto; /* Allow horizontal scroll for long timelines */
+	overflow-y: auto; /* Allow vertical scrolling for tracks */
+	height: 300px; /* Fixed height for timeline */
+	max-width: 100%; /* Prevent horizontal overflow */
+	box-sizing: border-box; /* Include padding/border in width */
 }
 
 .timeline-header {
@@ -1181,6 +1433,26 @@ const handleExport = () => {
 	margin: 0;
 	font-size: 0.875rem;
 	font-weight: 600;
+}
+
+.timeline-info {
+	display: flex;
+	align-items: center;
+	gap: 1rem;
+	font-size: 0.75rem;
+	color: rgb(156 163 175);
+}
+
+.total-duration {
+	font-weight: 500;
+	color: rgb(59 130 246);
+}
+
+.clip-count-badge {
+	background-color: rgb(55 65 81);
+	padding: 0.25rem 0.5rem;
+	border-radius: 0.25rem;
+	font-size: 0.7rem;
 }
 
 .timeline-controls {
@@ -1233,7 +1505,7 @@ const handleExport = () => {
 
 .track {
 	display: flex;
-	min-height: 80px;
+	height: 200px; /* INCREASED from 150px to give MUCH more space for clips */
 	border-bottom: 1px solid rgb(55 65 81);
 }
 
@@ -1254,20 +1526,67 @@ const handleExport = () => {
 	position: relative;
 	min-width: 2000px;
 	padding: 0.5rem 0;
+	height: 100%;
+	overflow: visible;
 }
 
 .timeline-clip {
 	position: absolute;
-	height: 60px;
+	height: 100px;
+	top: 20px; /* Fixed position from top */
 	background: linear-gradient(135deg, rgb(59 130 246) 0%, rgb(37 99 235) 100%);
 	border-radius: 0.25rem;
-	cursor: pointer;
+	cursor: grab;
 	display: flex;
 	align-items: center;
 	padding: 0 0.75rem;
 	transition: all 0.2s ease;
-	border: 2px solid transparent;
-	animation: clipAppear 0.3s ease;
+	min-width: 80px;
+	box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+	box-sizing: border-box;
+	z-index: 100 !important; /* Force to top */
+}
+
+.timeline-clip:hover {
+	border-color: rgb(147 197 253);
+	transform: translateY(-2px);
+	box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+.timeline-clip:active {
+	cursor: grabbing;
+}
+
+.timeline-clip.dragging {
+	opacity: 0.5;
+	transform: scale(1.05);
+	z-index: 1000;
+	box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+}
+
+.timeline-clip.drop-target::before {
+	content: '';
+	position: absolute;
+	left: -4px;
+	top: 0;
+	bottom: 0;
+	width: 4px;
+	background: #10b981;
+	border-radius: 2px;
+	animation: pulse 1s ease-in-out infinite;
+}
+
+@keyframes pulse {
+	0%, 100% { opacity: 1; }
+	50% { opacity: 0.5; }
+}
+
+.clip-duration-badge {
+	margin-left: auto;
+	font-size: 0.7rem;
+	background: rgba(0, 0, 0, 0.3);
+	padding: 0.125rem 0.375rem;
+	border-radius: 0.25rem;
 }
 
 @keyframes clipAppear {

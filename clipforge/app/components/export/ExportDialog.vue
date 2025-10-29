@@ -1,6 +1,6 @@
 <template>
-	<UModal v-model="isOpen" :ui="{ width: 'sm:max-w-lg' }">
-		<UCard>
+	<UModal v-model="isOpen" :ui="{ width: 'sm:max-w-2xl', height: 'max-h-[90vh]' }">
+		<UCard :ui="{ body: { base: 'max-h-[60vh] overflow-y-auto' } }">
 			<template #header>
 				<div class="flex items-center justify-between">
 					<h3 class="text-lg font-semibold">Export Video</h3>
@@ -14,113 +14,119 @@
 			</template>
 
 			<div class="space-y-4">
-				<!-- Export Options -->
-				<div v-if="!isExporting">
-					<!-- Preset Selection -->
-					<div class="option-group">
-						<label class="option-label">Export Preset</label>
-						<USelectMenu
-							v-model="selectedPreset"
-							:options="presetOptions"
-							option-attribute="name"
-							value-attribute="id"
-							placeholder="Choose a preset..."
-							@change="onPresetChange"
-						>
-							<template #label>
-								<div v-if="selectedPreset" class="flex items-center justify-between w-full">
-									<span>{{ getPresetById(selectedPreset)?.name }}</span>
-									<span class="text-xs text-gray-400">{{ getPresetById(selectedPreset)?.estimatedSize }}</span>
-								</div>
-							</template>
-							<template #option="{ option }">
-								<div class="flex items-center justify-between w-full">
-									<div>
-										<div class="font-medium">{{ option.name }}</div>
-										<div class="text-xs text-gray-400">{{ option.description }}</div>
-									</div>
-									<div class="text-xs text-gray-400">{{ option.estimatedSize }}</div>
-								</div>
-							</template>
-						</USelectMenu>
+				<!-- Native Export Status -->
+				<div class="success-box">
+					<i class="i-heroicons-check-circle" />
+					<div>
+						<div class="font-semibold">Native Video Export Ready</div>
+						<div class="text-sm mt-1">ClipForge uses native macOS AVFoundation for video export - no additional software required!</div>
 					</div>
+				</div>
 
-					<!-- File Name -->
+				<!-- Preset Selection -->
+				<div class="option-group">
+					<label class="option-label">Export Preset</label>
+					<USelectMenu
+						v-model="selectedPreset"
+						:options="presetOptions"
+						option-attribute="name"
+						value-attribute="id"
+						placeholder="Choose a preset..."
+						@change="onPresetChange"
+					>
+						<template #label>
+							<div v-if="selectedPreset" class="flex items-center justify-between w-full">
+								<span>{{ getPresetById(selectedPreset)?.name }}</span>
+								<span class="text-xs text-gray-400">{{ getPresetById(selectedPreset)?.estimatedSize }}</span>
+							</div>
+						</template>
+						<template #option="{ option }">
+							<div class="flex items-center justify-between w-full">
+								<div>
+									<div class="font-medium">{{ option.name }}</div>
+									<div class="text-xs text-gray-400">{{ option.description }}</div>
+								</div>
+								<div class="text-xs text-gray-400">{{ option.estimatedSize }}</div>
+							</div>
+						</template>
+					</USelectMenu>
+				</div>
+
+				<!-- File Name -->
+				<div class="option-group">
+					<label class="option-label">File Name</label>
+					<input 
+						v-model="fileName"
+						type="text"
+						class="option-input"
+						placeholder="my-video.mp4"
+					/>
+				</div>
+
+				<!-- Advanced Options (Collapsible) -->
+				<div class="option-group">
+					<UButton 
+						variant="ghost" 
+						size="sm"
+						@click="showAdvanced = !showAdvanced"
+						:icon="showAdvanced ? 'i-heroicons-chevron-up' : 'i-heroicons-chevron-down'"
+					>
+						Advanced Options
+					</UButton>
+				</div>
+
+				<div v-if="showAdvanced" class="space-y-4 pl-4 border-l-2 border-gray-700">
 					<div class="option-group">
-						<label class="option-label">File Name</label>
-						<input 
-							v-model="fileName"
-							type="text"
-							class="option-input"
-							placeholder="my-video.mp4"
+						<label class="option-label">Resolution</label>
+						<USelectMenu
+							v-model="resolution"
+							:options="resolutionOptions"
+							option-attribute="label"
+							value-attribute="value"
 						/>
 					</div>
 
-					<!-- Advanced Options (Collapsible) -->
 					<div class="option-group">
-						<UButton 
-							variant="ghost" 
-							size="sm"
-							@click="showAdvanced = !showAdvanced"
-							:icon="showAdvanced ? 'i-heroicons-chevron-up' : 'i-heroicons-chevron-down'"
-						>
-							Advanced Options
-						</UButton>
+						<label class="option-label">Quality</label>
+						<USelectMenu
+							v-model="quality"
+							:options="qualityOptions"
+							option-attribute="label"
+							value-attribute="value"
+						/>
 					</div>
 
-					<div v-if="showAdvanced" class="space-y-4 pl-4 border-l-2 border-gray-700">
-						<div class="option-group">
-							<label class="option-label">Resolution</label>
-							<USelectMenu
-								v-model="resolution"
-								:options="resolutionOptions"
-								option-attribute="label"
-								value-attribute="value"
-							/>
-						</div>
-
-						<div class="option-group">
-							<label class="option-label">Quality</label>
-							<USelectMenu
-								v-model="quality"
-								:options="qualityOptions"
-								option-attribute="label"
-								value-attribute="value"
-							/>
-						</div>
-
-						<div class="option-group">
-							<label class="option-label">Format</label>
-							<USelectMenu
-								v-model="format"
-								:options="formatOptions"
-								option-attribute="label"
-								value-attribute="value"
-							/>
-						</div>
-
-						<div class="option-group">
-							<label class="option-label">Encoding Preset</label>
-							<USelectMenu
-								v-model="preset"
-								:options="ffmpegPresetOptions"
-								option-attribute="label"
-								value-attribute="value"
-							/>
-						</div>
+					<div class="option-group">
+						<label class="option-label">Format</label>
+						<USelectMenu
+							v-model="format"
+							:options="formatOptions"
+							option-attribute="label"
+							value-attribute="value"
+						/>
 					</div>
 
-					<!-- File Size Estimate -->
-					<div v-if="estimatedSize" class="info-box">
-						<i class="i-heroicons-information-circle" />
-						<span>Estimated file size: {{ estimatedSize }}</span>
+					<div class="option-group">
+						<label class="option-label">Encoding Preset</label>
+						<USelectMenu
+							v-model="preset"
+							:options="ffmpegPresetOptions"
+							option-attribute="label"
+							value-attribute="value"
+						/>
 					</div>
+				</div>
 
-					<!-- PiP Info -->
-					<div v-if="webcamClip" class="info-box">
-						<i class="i-heroicons-information-circle" />
-						<span>PiP overlay will be composited into final video</span>
-					</div>
+				<!-- File Size Estimate -->
+				<div v-if="estimatedSize" class="info-box">
+					<i class="i-heroicons-information-circle" />
+					<span>Estimated file size: {{ estimatedSize }}</span>
+				</div>
+
+				<!-- PiP Info -->
+				<div v-if="webcamClip" class="info-box">
+					<i class="i-heroicons-information-circle" />
+					<span>PiP overlay will be composited into final video</span>
 				</div>
 
 				<!-- Export Progress -->
@@ -218,13 +224,29 @@ const {
 	cancelExport,
 	getProgressDetails,
 	getFormattedTime,
-	getProcessingSpeed
-} = useExport()
+	getProcessingSpeed,
+	isNativeExportAvailable,
+	checkNativeExportAvailability,
+	getNativeExportStatus
+} = useNativeVideoExport()
 
 const isOpen = ref(true)
 const fileName = ref(`${props.projectName || 'video'}.mp4`)
 const selectedPreset = ref('youtube')
 const showAdvanced = ref(false)
+
+// Debug logging
+console.log('📤 ExportDialog mounted with:', {
+	clips: props.clips.length,
+	projectName: props.projectName,
+	fileName: fileName.value,
+	selectedPreset: selectedPreset.value
+})
+
+// Check native export availability on mount
+onMounted(async () => {
+	await checkNativeExportAvailability()
+})
 
 // Advanced options (can be overridden)
 const resolution = ref('1080p')
@@ -306,6 +328,15 @@ const onPresetChange = (presetId: string) => {
 }
 
 const startExport = async () => {
+	console.log('🎬 Starting export with settings:', {
+		clips: props.clips.length,
+		fileName: fileName.value,
+		resolution: resolution.value,
+		quality: quality.value,
+		format: format.value,
+		preset: preset.value
+	})
+	
 	const result = await exportVideo(
 		props.clips,
 		fileName.value,
@@ -318,9 +349,12 @@ const startExport = async () => {
 	)
 
 	if (result.success) {
+		console.log('✅ Export completed successfully')
 		setTimeout(() => {
 			close()
 		}, 1000)
+	} else {
+		console.error('❌ Export failed:', result.error)
 	}
 }
 

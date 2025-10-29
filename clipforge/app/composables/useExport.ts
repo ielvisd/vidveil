@@ -1,5 +1,5 @@
 import { ref } from 'vue'
-import type { Clip } from '~/types/project'
+import type { Clip } from '../../types/project'
 import { useFFmpeg, type ExportSettings } from './useFFmpeg'
 import { planVideoComposition, executeCompositionPlan, createPipComposition, generateShapeSVG } from '~/utils/video-compositor'
 
@@ -46,13 +46,39 @@ export const useExport = () => {
 		totalSteps.value = 0
 
 		try {
-			// Ensure FFmpeg is loaded
-			await loadFFmpeg()
-			resetProgress()
+			// Sort clips by timeline order before exporting
+			const orderedClips = [...clips].sort((a, b) => {
+				const aOrder = a.metadata?.order ?? a.start_time ?? 0
+				const bOrder = b.metadata?.order ?? b.start_time ?? 0
+				return aOrder - bOrder
+			})
+
+			// Ensure FFmpeg is loaded with retry mechanism
+			let ffmpegLoaded = false
+			let retryCount = 0
+			const maxRetries = 3
+
+			while (!ffmpegLoaded && retryCount < maxRetries) {
+				try {
+					await loadFFmpeg()
+					ffmpegLoaded = true
+					resetProgress()
+				} catch (ffmpegError) {
+					retryCount++
+					console.warn(`⚠️ FFmpeg load attempt ${retryCount} failed:`, ffmpegError)
+					
+					if (retryCount >= maxRetries) {
+						throw new Error(`Failed to load FFmpeg after ${maxRetries} attempts. Please try again.`)
+					}
+					
+					// Wait before retry
+					await new Promise(resolve => setTimeout(resolve, 1000))
+				}
+			}
 
 			// Find screen and webcam clips
-			const screenClip = clips.find(c => c.metadata?.type === 'screen')
-			const webcamClip = clips.find(c => c.metadata?.type === 'webcam')
+			const screenClip = orderedClips.find(c => c.metadata?.type === 'screen')
+			const webcamClip = orderedClips.find(c => c.metadata?.type === 'webcam')
 
 			if (!screenClip) {
 				throw new Error('No screen recording found')
@@ -61,7 +87,7 @@ export const useExport = () => {
 			// Create PiP composition if webcam clip exists
 			let pipComposition = null
 			if (webcamClip && webcamClip.pip_config) {
-				pipComposition = createPipComposition(clips, webcamClip.pip_config)
+				pipComposition = createPipComposition(orderedClips, webcamClip.pip_config)
 			}
 
 			// Plan the composition workflow
@@ -72,15 +98,15 @@ export const useExport = () => {
 				preset: 'medium'
 			}
 
-			const compositionPlan = planVideoComposition(clips, exportSettings, pipComposition)
+			const compositionPlan = planVideoComposition(orderedClips, exportSettings, pipComposition || undefined)
 			totalSteps.value = compositionPlan.steps.length
 
 			// Write input files to FFmpeg virtual filesystem
 			currentStep.value = 'Preparing files...'
 			exportProgress.value = 5
 
-			for (let i = 0; i < clips.length; i++) {
-				const clip = clips[i]
+			for (let i = 0; i < orderedClips.length; i++) {
+				const clip = orderedClips[i]
 				const inputFile = `clip_${i}.${getFileExtension(clip.src)}`
 				
 				// Fetch file data
@@ -127,7 +153,7 @@ export const useExport = () => {
 			const url = URL.createObjectURL(outputBlob)
 			const a = document.createElement('a')
 			a.href = url
-			a.download = fileName
+			a.download = fileName || 'export.mp4'
 			document.body.appendChild(a)
 			a.click()
 			document.body.removeChild(a)
@@ -140,7 +166,7 @@ export const useExport = () => {
 			currentStep.value = 'Export complete!'
 			isExporting.value = false
 			
-			return { success: true, outputPath: fileName }
+			return { success: true, outputPath: fileName || 'export.mp4' }
 		} catch (err: any) {
 			console.error('Export error:', err)
 			error.value = err.message || 'Export failed'
@@ -194,6 +220,27 @@ export const useExport = () => {
 		}
 	}
 
+	/**
+	 * Get formatted time remaining
+	 */
+	const getFormattedTime = computed(() => {
+		// Simple placeholder - could be enhanced with actual time tracking
+		if (!isExporting.value) return '0:00'
+		const seconds = Math.ceil((100 - exportProgress.value) / 100 * 60) // Estimate
+		const mins = Math.floor(seconds / 60)
+		const secs = seconds % 60
+		return `${mins}:${secs.toString().padStart(2, '0')}`
+	})
+
+	/**
+	 * Get processing speed
+	 */
+	const getProcessingSpeed = computed(() => {
+		if (!isExporting.value) return '0x'
+		// Simple placeholder - could be enhanced with actual speed tracking
+		return '1.2x'
+	})
+
 	return {
 		isExporting,
 		exportProgress,
@@ -202,7 +249,9 @@ export const useExport = () => {
 		totalSteps,
 		exportVideo,
 		cancelExport,
-		getProgressDetails
+		getProgressDetails,
+		getFormattedTime,
+		getProcessingSpeed
 	}
 }
 

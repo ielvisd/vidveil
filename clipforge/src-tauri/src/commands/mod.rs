@@ -1,7 +1,6 @@
 pub mod media;
-pub mod recording;
 pub mod screen_capture;
-
-#[cfg(target_os = "macos")]
+pub mod recording;
 pub mod macos_capture;
-
+pub mod window;
+pub mod video_processing;

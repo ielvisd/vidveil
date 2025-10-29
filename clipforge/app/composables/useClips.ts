@@ -1,5 +1,5 @@
 import { ref, computed } from 'vue'
-import type { Clip } from '~/types/project'
+import type { Clip } from '../../types/project'
 import { saveVideoToIndexedDB, getVideoFromIndexedDB, deleteVideoFromIndexedDB, createBlobURL } from '~/utils/indexedDB'
 
 // Global state to persist clips across components
@@ -128,7 +128,7 @@ export const useClips = () => {
 
 			if (error) throw error
 
-			const index = clips.value.findIndex(c => c.id === clipId)
+			const index = clips.value.findIndex((c: Clip) => c.id === clipId)
 			if (index !== -1) {
 				clips.value[index] = data
 			}
@@ -147,7 +147,7 @@ export const useClips = () => {
 			const supabase = useSupabaseClient()
 
 			// Check if clip is stored in IndexedDB
-			const clip = clips.value.find(c => c.id === clipId)
+			const clip = clips.value.find((c: Clip) => c.id === clipId)
 			if (clip?.metadata?.storageType === 'local') {
 				try {
 					await deleteVideoFromIndexedDB(clipId)
@@ -164,7 +164,7 @@ export const useClips = () => {
 
 			if (error) throw error
 
-			clips.value = clips.value.filter(c => c.id !== clipId)
+			clips.value = clips.value.filter((c: Clip) => c.id !== clipId)
 
 			if (selectedClip.value?.id === clipId) {
 				selectedClip.value = null
@@ -186,7 +186,12 @@ export const useClips = () => {
 			for (const [index, clip] of newOrder.entries()) {
 				await supabase
 					.from('clips')
-					.update({ metadata: { ...clip.metadata, order: index } })
+					.update({ 
+						metadata: { 
+							...clip.metadata, 
+							order: index 
+						} 
+					})
 					.eq('id', clip.id)
 			}
 
@@ -215,7 +220,7 @@ export const useClips = () => {
 
 			// Convert IndexedDB references to blob URLs
 			const clipsWithUrls = await Promise.all(
-				(data || []).map(async (clip) => {
+				(data || []).map(async (clip: Clip) => {
 					if (clip.src.startsWith('indexeddb://')) {
 						const id = clip.src.replace('indexeddb://', '')
 						try {
@@ -235,12 +240,16 @@ export const useClips = () => {
 							return null
 						}
 					}
+					// For blob URLs, just return the clip as-is
 					return clip
 				})
 			)
 
 			// Filter out null clips (missing from IndexedDB)
-			clips.value = clipsWithUrls.filter(c => c !== null) as any[]
+			const validClips = clipsWithUrls.filter(c => c !== null) as any[]
+			
+			console.log(`📊 Fetched ${validClips.length} valid clips from ${(data || []).length} total clips`)
+			clips.value = validClips
 
 			return { clips: clips.value, error: null }
 		} catch (error: any) {

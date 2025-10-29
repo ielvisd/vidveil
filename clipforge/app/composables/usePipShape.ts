@@ -22,13 +22,14 @@ export const usePipShape = () => {
 	const isActive = computed(() => pipConfig.value !== null)
 
 	const applyShape = (shape: PredefinedShape | 'rounded', clipId?: string) => {
-		// Default position: bottom-right corner
+		// Default position: bottom-right corner with proper pixel coordinates
+		// Note: These will be adjusted based on actual container size in the component
 		globalPipConfig.value = {
 			shape,
-			width: 25, // 25% of video width
-			height: 25, // 25% of video height
-			x: 70, // 70% from left
-			y: 70, // 70% from top
+			width: 200, // Fixed pixel width
+			height: 200, // Fixed pixel height
+			x: window.innerWidth - 500, // Start near right edge (will be constrained by container)
+			y: window.innerHeight - 600, // Start near bottom (will be constrained by container)
 			borderColor: '#ffffff',
 			borderWidth: 3,
 			shadow: true

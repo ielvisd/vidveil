@@ -12,6 +12,14 @@
 			</UButton>
 			<h1>Screen Recorder</h1>
 			<div class="spacer" />
+			<UButton 
+				@click="goToProjectEditor" 
+				icon="i-heroicons-pencil-square"
+				color="primary"
+				size="sm"
+			>
+				Open Editor
+			</UButton>
 		</div>
 
 		<!-- Main Content -->
@@ -23,6 +31,11 @@
 					<i class="i-heroicons-video-camera text-8xl text-gray-600" />
 					<h2>Ready to Record</h2>
 					<p>Click the record button below to start capturing</p>
+					<div class="editor-hint">
+						<p class="text-sm text-blue-400 mt-4">
+							💡 <strong>Tip:</strong> After recording, use the "Open Editor" button above to access clips, shapes, and timeline
+						</p>
+					</div>
 					<!-- <p class="text-sm text-gray-500 mt-2">Screen + {{ includeWebcam ? 'Webcam' : 'No Webcam' }}</p> -->
 				</div>
 				
@@ -81,7 +94,7 @@
 						<video 
 							v-if="screenBlobUrl"
 							:src="screenBlobUrl" 
-							controls 
+							controls
 							class="preview-video-main"
 							preload="metadata"
 							@loadedmetadata="handlePlaybackLoaded"
@@ -220,6 +233,18 @@ const recordingTime = ref('00:00')
 const recordingInterval = ref<NodeJS.Timeout | null>(null)
 const recordingStartTime = ref<number>(0)
 
+// PiP configuration for preview
+const pipConfig = ref({
+	x: 80, // Position from right
+	y: 80, // Position from bottom  
+	width: 20, // Width percentage
+	height: 20, // Height percentage
+	shape: 'circle',
+	borderWidth: 3,
+	borderColor: '#fff',
+	shadow: true
+})
+
 // Use refs instead of computed to avoid recreating URLs
 const screenBlobUrl = ref('')
 const webcamBlobUrl = ref('')
@@ -303,38 +328,117 @@ const saveRecordings = async () => {
 
 	saving.value = true
 	
-	// Native recording in Tauri - add directly to project (no separate window)
 	try {
-		// Save screen recording - pass Blob directly to avoid URL revocation issues
+		// Try to composite videos if FFmpeg is available
+		if (recordedWebcamBlob.value) {
+			try {
+				console.log('🎬 Attempting to composite screen + webcam into unified video...')
+				
+				const { useFFmpeg } = await import('~/composables/useFFmpeg')
+				const { fetchFile } = await import('@ffmpeg/util')
+				
+				const ffmpeg = useFFmpeg()
+				await ffmpeg.loadFFmpeg()
+				
+				// Create file inputs
+				const screenFile = await fetchFile(recordedScreenBlob.value)
+				const webcamFile = await fetchFile(recordedWebcamBlob.value)
+				
+				await ffmpeg.writeFile('screen.mp4', screenFile)
+				await ffmpeg.writeFile('webcam.mp4', webcamFile)
+				
+				// Composite webcam as PiP overlay on screen recording
+				await ffmpeg.exec([
+					'-i', 'screen.mp4',
+					'-i', 'webcam.mp4',
+					'-filter_complex', 
+					'[1:v]scale=320:240[webcam_scaled];[0:v][webcam_scaled]overlay=main_w-overlay_w-20:20',
+					'-c:a', 'copy',
+					'-c:v', 'libx264',
+					'-preset', 'fast',
+					'-crf', '23',
+					'output.mp4'
+				])
+				
+				// Get the composited output
+				const outputData = await ffmpeg.readFile('output.mp4')
+				const finalBlob = new Blob([new Uint8Array(outputData)], { type: 'video/mp4' })
+				const finalSrc = URL.createObjectURL(finalBlob)
+				const finalDuration = await getVideoDuration(finalBlob)
+
+				console.log('📥 Adding unified recording to project...')
+				
+				const result = await addClip(currentProject.value.id, finalSrc, {
+					name: 'Screen Recording (with webcam)',
+					duration: finalDuration,
+					type: 'screen',
+					fileSize: finalBlob.size,
+					format: 'video/mp4',
+					metadata: {
+						hasWebcam: true,
+						unified: true
+					}
+				})
+
+				if (result.error) {
+					throw new Error(result.error)
+				}
+
+				console.log('✅ Unified recording saved! Navigating to project...')
+				await navigateTo(`/project/${currentProject.value.id}`)
+				return
+			} catch (ffmpegError: any) {
+				console.warn('⚠️ FFmpeg compositing failed, saving clips separately:', ffmpegError.message)
+				// Fall through to save clips separately
+			}
+		}
+		
+		// Fallback: Save clips separately (screen and webcam as individual clips)
+		console.log('📥 Saving clips separately...')
+		
+		// Save screen recording
 		const screenSrc = URL.createObjectURL(recordedScreenBlob.value)
 		const screenDuration = await getVideoDuration(recordedScreenBlob.value)
-
-		console.log('📥 Adding screen recording to project...')
-		await addClip(currentProject.value.id, screenSrc, {
+		
+		const screenResult = await addClip(currentProject.value.id, screenSrc, {
 			name: 'Screen Recording',
 			duration: screenDuration,
 			type: 'screen',
 			fileSize: recordedScreenBlob.value.size,
-			format: 'video/mp4' // Native recording produces MP4, not WebM
+			format: 'video/mp4',
+			metadata: {
+				hasWebcam: false,
+				unified: false
+			}
 		})
+
+		if (screenResult.error) {
+			throw new Error(screenResult.error)
+		}
 
 		// Save webcam recording if available
 		if (recordedWebcamBlob.value) {
 			const webcamSrc = URL.createObjectURL(recordedWebcamBlob.value)
 			const webcamDuration = await getVideoDuration(recordedWebcamBlob.value)
-
-			console.log('📥 Adding webcam recording to project...')
-			await addClip(currentProject.value.id, webcamSrc, {
-				name: 'Webcam',
+			
+			const webcamResult = await addClip(currentProject.value.id, webcamSrc, {
+				name: 'Webcam Recording',
 				duration: webcamDuration,
 				type: 'webcam',
 				fileSize: recordedWebcamBlob.value.size,
-				format: 'video/mp4' // Native recording produces MP4, not WebM
+				format: 'video/mp4',
+				metadata: {
+					hasWebcam: true,
+					unified: false
+				}
 			})
+
+			if (webcamResult.error) {
+				throw new Error(webcamResult.error)
+			}
 		}
 
-		console.log('✅ Recordings saved! Navigating to project...')
-		// Navigate back to project
+		console.log('✅ Clips saved separately! Navigating to project...')
 		await navigateTo(`/project/${currentProject.value.id}`)
 	} catch (error: any) {
 		console.error('❌ Failed to save recordings:', error)
@@ -399,10 +503,41 @@ const discardRecordings = () => {
 	recordingTime.value = '00:00'
 }
 
+// PiP handlers
+const removePip = () => {
+	pipConfig.value = {
+		x: 80,
+		y: 80,
+		width: 20,
+		height: 20,
+		shape: 'circle',
+		borderWidth: 3,
+		borderColor: '#fff',
+		shadow: true
+	}
+}
+
+const updatePipPosition = (x: number, y: number) => {
+	if (pipConfig.value) {
+		pipConfig.value.x = x
+		pipConfig.value.y = y
+	}
+}
+
 const goBack = () => {
 	if (currentProject.value) {
 		router.push(`/project/${currentProject.value.id}`)
 	} else {
+		router.push('/projects')
+	}
+}
+
+// Add a button to go to project editor
+const goToProjectEditor = () => {
+	if (currentProject.value) {
+		router.push(`/project/${currentProject.value.id}`)
+	} else {
+		// If no project, create one or go to projects
 		router.push('/projects')
 	}
 }
@@ -526,6 +661,14 @@ onUnmounted(() => {
 .start-prompt p {
 	margin: 0.5rem 0;
 	color: rgb(156 163 175);
+}
+
+.editor-hint {
+	margin-top: 1rem;
+	padding: 1rem;
+	background-color: rgba(59, 130, 246, 0.1);
+	border: 1px solid rgba(59, 130, 246, 0.3);
+	border-radius: 0.5rem;
 }
 
 .recording-active {

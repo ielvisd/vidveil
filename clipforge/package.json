@@ -29,8 +29,9 @@
 		"test:install": "playwright install"
 	},
 	"dependencies": {
-		"@ffmpeg/ffmpeg": "^0.12.15",
-		"@ffmpeg/util": "^0.12.2",
+		"@ffmpeg/core": "0.12.2",
+		"@ffmpeg/ffmpeg": "0.12.2",
+		"@ffmpeg/util": "0.12.0",
 		"@nuxt/ui": "4.0.0-alpha.2",
 		"@supabase/supabase-js": "^2.76.1",
 		"@tauri-apps/api": "^2.8.0",
