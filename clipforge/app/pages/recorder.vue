@@ -27,17 +27,14 @@
 			<!-- Preview Area -->
 			<div class="recording-area">
 				<!-- Not recording yet -->
-				<div v-if="!isRecording && !recordedScreenBlob" class="start-prompt">
-					<i class="i-heroicons-video-camera text-8xl text-gray-600" />
-					<h2>Ready to Record</h2>
-					<p>Click the record button below to start capturing</p>
-					<div class="editor-hint">
-						<p class="text-sm text-blue-400 mt-4">
-							💡 <strong>Tip:</strong> After recording, use the "Open Editor" button above to access clips, shapes, and timeline
-						</p>
-					</div>
-					<!-- <p class="text-sm text-gray-500 mt-2">Screen + {{ includeWebcam ? 'Webcam' : 'No Webcam' }}</p> -->
+			<div v-if="!isRecording && !recordedScreenBlob" class="start-prompt">
+				<i class="i-heroicons-video-camera text-4xl text-gray-600" />
+				<h2>Ready to Record</h2>
+				<p>Click the record button below to start capturing</p>
+				<div class="editor-hint">
+					💡 <strong>Tip:</strong> After recording, use the "Open Editor" button above to access clips, shapes, and timeline
 				</div>
+			</div>
 				
 			<!-- Currently Recording -->
 			<div v-else-if="isRecording" class="recording-active">
@@ -597,6 +594,7 @@ onUnmounted(() => {
 	display: flex;
 	flex-direction: column;
 	height: 100vh;
+	max-height: 100vh;
 	background-color: rgb(17 24 39);
 	color: white;
 	overflow: hidden;
@@ -606,9 +604,10 @@ onUnmounted(() => {
 	display: flex;
 	align-items: center;
 	gap: 1rem;
-	padding: 0.75rem 1.5rem;
+	padding: 0.5rem 1.5rem;
 	background-color: rgb(31 41 55);
 	border-bottom: 1px solid rgb(55 65 81);
+	flex-shrink: 0;
 }
 
 .top-bar h1 {
@@ -626,10 +625,13 @@ onUnmounted(() => {
 	flex: 1;
 	display: grid;
 	grid-template-columns: 1fr 300px;
-	grid-template-rows: 1fr auto;
-	gap: 1.5rem;
-	padding: 1.5rem;
+	grid-template-rows: minmax(0, 1fr) min-content;
+	gap: 0.75rem;
+	padding: 0.75rem;
 	overflow: hidden;
+	min-height: 0;
+	max-height: 100%;
+	height: 100%;
 }
 
 .recording-area {
@@ -644,31 +646,41 @@ onUnmounted(() => {
 	flex-direction: column;
 	overflow: hidden;
 	position: relative;
+	min-height: 0;
+	max-height: 100%;
+	height: 100%;
+	padding: 0.75rem;
 }
 
 .start-prompt {
 	text-align: center;
 	color: rgb(107 114 128);
+	padding: 0.25rem;
+	max-width: 100%;
+	width: 100%;
+	box-sizing: border-box;
 }
 
 .start-prompt h2 {
-	margin: 1rem 0 0.5rem 0;
-	font-size: 1.5rem;
+	margin: 0.25rem 0 0.125rem 0;
+	font-size: 1.125rem;
 	font-weight: 600;
 	color: white;
 }
 
 .start-prompt p {
-	margin: 0.5rem 0;
+	margin: 0.125rem 0;
 	color: rgb(156 163 175);
+	font-size: 0.8125rem;
 }
 
 .editor-hint {
-	margin-top: 1rem;
-	padding: 1rem;
+	margin-top: 0.375rem;
+	padding: 0.35rem 0.5rem;
 	background-color: rgba(59, 130, 246, 0.1);
 	border: 1px solid rgba(59, 130, 246, 0.3);
-	border-radius: 0.5rem;
+	border-radius: 0.375rem;
+	font-size: 0.75rem;
 }
 
 .recording-active {
@@ -860,6 +872,10 @@ onUnmounted(() => {
 	grid-row: 2;
 	display: flex;
 	justify-content: center;
+	align-items: center;
+	padding: 0.75rem 0;
+	flex-shrink: 0;
+	min-height: fit-content;
 }
 
 .options-area {
@@ -867,14 +883,17 @@ onUnmounted(() => {
 	grid-row: 1 / 3;
 	display: flex;
 	flex-direction: column;
-	gap: 1.5rem;
+	gap: 1rem;
+	overflow-y: auto;
+	min-height: 0;
 }
 
 .option-card {
 	background-color: rgb(31 41 55);
 	border-radius: 0.5rem;
 	border: 1px solid rgb(55 65 81);
-	padding: 1.25rem;
+	padding: 1rem;
+	flex-shrink: 0;
 }
 
 .option-card h3 {

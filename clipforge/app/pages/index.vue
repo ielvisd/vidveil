@@ -6,44 +6,21 @@
 			description="Create stunning tutorials with AI-assisted picture-in-picture overlays. Record, edit, and export polished videos with effortless masking and natural language shape generation."
 			:links="heroLinks"
 			orientation="vertical"
-			class="text-center"
-		>
-			<template #default>
-				<div class="relative mt-12">
-					<div class="absolute inset-0 bg-gradient-to-r from-pink-500/20 to-purple-500/20 blur-3xl rounded-full" />
-					<div class="relative bg-gradient-to-br from-pink-500/10 to-black border border-pink-500/20 rounded-2xl p-8 backdrop-blur-sm">
-						<UIcon name="i-lucide-video" class="w-24 h-24 mx-auto text-pink-500 mb-4" />
-						<h3 class="text-2xl font-bold text-white mb-2">PiP Magic</h3>
-						<p class="text-gray-400">Natural language shape generation</p>
-					</div>
-				</div>
-			</template>
-		</UPageHero>
+		/>
 
-		<UContainer class="py-16 md:py-24">
-			<div class="text-center mb-12 md:mb-16">
-				<h2 class="text-3xl md:text-4xl font-bold text-white mb-4">Features</h2>
-				<p class="text-gray-400 text-lg">Everything you need to create professional videos</p>
-			</div>
+		<UPageSection
+			headline="Features"
+			title="Everything you need to create professional videos"
+			description="Powerful tools combined in one intuitive desktop application"
+			:features="features"
+			orientation="vertical"
+		/>
 
-			<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 md:gap-8">
-				<UCard
-					v-for="feature in features"
-					:key="feature.title"
-					class="bg-zinc-900/50 border-zinc-800 hover:border-pink-500/50 transition-all hover:shadow-lg hover:shadow-pink-500/10"
-				>
-					<template #header>
-						<div class="flex items-center gap-4 mb-4">
-							<div class="p-3 bg-pink-500/10 rounded-lg border border-pink-500/20">
-								<UIcon :name="feature.icon" class="w-6 h-6 text-pink-500" />
-							</div>
-							<h3 class="text-xl font-semibold text-white">{{ feature.title }}</h3>
-						</div>
-					</template>
-					<p class="text-gray-400">{{ feature.description }}</p>
-				</UCard>
-			</div>
-		</UContainer>
+		<UPageCTA
+			title="Ready to get started?"
+			description="Create your first project and start producing professional videos today."
+			:links="ctaLinks"
+		/>
 	</div>
 </template>
 
@@ -54,25 +31,17 @@ definePageMeta({
 
 const heroLinks = [
 	{
-		label: 'My Projects',
+		label: 'Get Started',
 		to: '/projects',
 		size: 'xl' as const,
 		color: 'primary' as const,
 		variant: 'solid' as const
 	},
 	{
-		label: 'Import Media',
+		label: 'Learn More',
 		to: '/library',
 		size: 'xl' as const,
-		variant: 'outline' as const,
-		class: 'border-pink-500/50 text-white hover:bg-pink-500/10'
-	},
-	{
-		label: 'Login',
-		to: '/login',
-		size: 'xl' as const,
-		variant: 'ghost' as const,
-		class: 'text-gray-300 hover:text-pink-500'
+		variant: 'outline' as const
 	}
 ]
 
@@ -80,22 +49,42 @@ const features = [
 	{
 		icon: 'i-lucide-folder-open',
 		title: 'Import & Organize',
-		description: 'Drag and drop videos into your library with ease'
+		description: 'Drag and drop videos into your library with ease',
+		orientation: 'vertical' as const
 	},
 	{
 		icon: 'i-lucide-scissors',
 		title: 'Timeline Editing',
-		description: 'Trim, split, and arrange your clips on a professional timeline'
+		description: 'Trim, split, and arrange your clips on a professional timeline',
+		orientation: 'vertical' as const
 	},
 	{
 		icon: 'i-lucide-sparkles',
-		title: 'PiP Shapes',
-		description: 'AI-powered custom shapes for picture-in-picture overlays'
+		title: 'AI PiP Shapes',
+		description: 'Natural language shape generation for picture-in-picture overlays',
+		orientation: 'vertical' as const
 	},
 	{
 		icon: 'i-lucide-video',
 		title: 'Screen Recording',
-		description: 'Record your screen with webcam overlay in one seamless workflow'
+		description: 'Record your screen with webcam overlay in one seamless workflow',
+		orientation: 'vertical' as const
+	}
+]
+
+const ctaLinks = [
+	{
+		label: 'View Projects',
+		to: '/projects',
+		size: 'lg' as const,
+		color: 'primary' as const,
+		variant: 'solid' as const
+	},
+	{
+		label: 'Sign In',
+		to: '/login',
+		size: 'lg' as const,
+		variant: 'outline' as const
 	}
 ]
 </script>
