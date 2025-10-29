@@ -62,6 +62,9 @@ CGSize get_resolution_size(const char* resolution) {
 
 // Helper function to get export preset based on quality
 NSString* get_export_preset(const char* quality, const char* preset) {
+    // Suppress unused parameter warning - kept for API consistency
+    (void)preset;
+    
     NSString* qualityStr = [NSString stringWithUTF8String:quality];
     
     // Map quality to export presets
@@ -120,28 +123,55 @@ AVMutableComposition* create_composition_from_clips(
         
         NSError* error = nil;
         
-        // Load screen video asset
-        NSURL* screenURL = [NSURL fileURLWithPath:[NSString stringWithUTF8String:screen_video_path]];
-        AVAsset* screenAsset = [AVAsset assetWithURL:screenURL];
-        
-        if (screenAsset == nil) {
-            NSLog(@"❌ Failed to load screen video asset");
+        // Validate screen video path exists
+        NSString* screenPath = [NSString stringWithUTF8String:screen_video_path];
+        NSFileManager* fileManager = [NSFileManager defaultManager];
+        if (![fileManager fileExistsAtPath:screenPath]) {
+            NSLog(@"❌ Screen video file does not exist: %@", screenPath);
             return nil;
         }
         
-        // Insert screen video track
-        AVAssetTrack* screenVideoTrack = [[screenAsset tracksWithMediaType:AVMediaTypeVideo] firstObject];
-        if (screenVideoTrack != nil) {
-            CMTimeRange timeRange = CMTimeRangeMake(kCMTimeZero, screenAsset.duration);
-            [screenTrack insertTimeRange:timeRange 
-                                 ofTrack:screenVideoTrack 
-                                  atTime:kCMTimeZero 
-                                   error:&error];
-            if (error != nil) {
-                NSLog(@"❌ Failed to insert screen video track: %@", error.localizedDescription);
-                return nil;
-            }
+        // Load screen video asset
+        NSURL* screenURL = [NSURL fileURLWithPath:screenPath];
+        AVAsset* screenAsset = [AVAsset assetWithURL:screenURL];
+        
+        if (screenAsset == nil) {
+            NSLog(@"❌ Failed to load screen video asset from: %@", screenPath);
+            return nil;
         }
+        
+        // Validate asset has video tracks
+        NSArray<AVAssetTrack*>* screenVideoTracks = [screenAsset tracksWithMediaType:AVMediaTypeVideo];
+        if (screenVideoTracks.count == 0) {
+            NSLog(@"❌ Screen asset has no video tracks: %@", screenPath);
+            return nil;
+        }
+        
+        NSLog(@"📹 Screen video asset loaded: %.0fx%.0f @ %.2fs", 
+            screenVideoTracks[0].naturalSize.width,
+            screenVideoTracks[0].naturalSize.height,
+            CMTimeGetSeconds(screenAsset.duration));
+        
+        // Insert screen video track (REQUIRED - composition is invalid without this)
+        AVAssetTrack* screenVideoTrack = screenVideoTracks.firstObject;
+        CMTimeRange timeRange = CMTimeRangeMake(kCMTimeZero, screenAsset.duration);
+        BOOL inserted = [screenTrack insertTimeRange:timeRange 
+                                             ofTrack:screenVideoTrack 
+                                              atTime:kCMTimeZero 
+                                               error:&error];
+        
+        if (!inserted || error != nil) {
+            NSLog(@"❌ Failed to insert screen video track: %@", error.localizedDescription ?: @"Unknown error");
+            return nil;
+        }
+        
+        // Verify track was actually inserted
+        if (screenTrack.segments.count == 0) {
+            NSLog(@"❌ Screen video track has no segments after insertion");
+            return nil;
+        }
+        
+        NSLog(@"✅ Screen video track inserted successfully (%lu segments)", (unsigned long)screenTrack.segments.count);
         
         // Insert screen audio track
         AVAssetTrack* screenAudioTrack = [[screenAsset tracksWithMediaType:AVMediaTypeAudio] firstObject];
@@ -158,28 +188,58 @@ AVMutableComposition* create_composition_from_clips(
         }
         
         // Handle webcam video if provided
-        if (webcamTrack != nil) {
-            NSURL* webcamURL = [NSURL fileURLWithPath:[NSString stringWithUTF8String:webcam_video_path]];
-            AVAsset* webcamAsset = [AVAsset assetWithURL:webcamURL];
+        if (webcamTrack != nil && webcam_video_path != NULL && strlen(webcam_video_path) > 0) {
+            NSString* webcamPath = [NSString stringWithUTF8String:webcam_video_path];
             
-            if (webcamAsset != nil) {
-                AVAssetTrack* webcamVideoTrack = [[webcamAsset tracksWithMediaType:AVMediaTypeVideo] firstObject];
-                if (webcamVideoTrack != nil) {
-                    CMTimeRange timeRange = CMTimeRangeMake(kCMTimeZero, webcamAsset.duration);
-                    [webcamTrack insertTimeRange:timeRange 
-                                         ofTrack:webcamVideoTrack 
-                                          atTime:kCMTimeZero 
-                                           error:&error];
-                    if (error != nil) {
-                        NSLog(@"⚠️ Failed to insert webcam video track: %@", error.localizedDescription);
-                        // Continue without webcam
+            // Validate webcam path exists
+            if (![fileManager fileExistsAtPath:webcamPath]) {
+                NSLog(@"⚠️ Webcam video file does not exist: %@ (skipping webcam)", webcamPath);
+                webcamTrack = nil;
+            } else {
+                NSURL* webcamURL = [NSURL fileURLWithPath:webcamPath];
+                AVAsset* webcamAsset = [AVAsset assetWithURL:webcamURL];
+                
+                if (webcamAsset != nil) {
+                    NSArray<AVAssetTrack*>* webcamVideoTracks = [webcamAsset tracksWithMediaType:AVMediaTypeVideo];
+                    if (webcamVideoTracks.count > 0) {
+                        AVAssetTrack* webcamVideoTrack = webcamVideoTracks.firstObject;
+                        CMTimeRange webcamTimeRange = CMTimeRangeMake(kCMTimeZero, webcamAsset.duration);
+                        
+                        NSError* webcamError = nil;
+                        BOOL webcamInserted = [webcamTrack insertTimeRange:webcamTimeRange 
+                                                                     ofTrack:webcamVideoTrack 
+                                                                      atTime:kCMTimeZero 
+                                                                       error:&webcamError];
+                        
+                        if (webcamInserted && webcamError == nil) {
+                            NSLog(@"✅ Webcam video track inserted successfully: %.0fx%.0f @ %.2fs",
+                                webcamVideoTrack.naturalSize.width,
+                                webcamVideoTrack.naturalSize.height,
+                                CMTimeGetSeconds(webcamAsset.duration));
+                        } else {
+                            NSLog(@"⚠️ Failed to insert webcam video track: %@ (continuing without webcam)", 
+                                webcamError.localizedDescription ?: @"Unknown error");
+                            webcamTrack = nil;
+                        }
+                    } else {
+                        NSLog(@"⚠️ Webcam asset has no video tracks (skipping webcam)");
                         webcamTrack = nil;
                     }
+                } else {
+                    NSLog(@"⚠️ Failed to load webcam asset from: %@ (skipping webcam)", webcamPath);
+                    webcamTrack = nil;
                 }
             }
         }
         
-        NSLog(@"✅ Composition created successfully");
+        // Final validation: composition must have at least the screen track
+        NSArray<AVMutableCompositionTrack*>* videoTracks = [composition tracksWithMediaType:AVMediaTypeVideo];
+        if (videoTracks.count == 0) {
+            NSLog(@"❌ Composition has no video tracks - composition invalid");
+            return nil;
+        }
+        
+        NSLog(@"✅ Composition created successfully with %lu video track(s)", (unsigned long)videoTracks.count);
         return composition;
     }
 }
@@ -202,13 +262,29 @@ AVMutableVideoComposition* create_pip_composition(
             return nil;
         }
         
+        // Ensure screen track is first (background layer)
+        // Track 0 should be screen, track 1 should be webcam (PiP overlay)
         AVMutableCompositionTrack* screenTrack = videoTracks[0];
         AVMutableCompositionTrack* webcamTrack = videoTracks.count > 1 ? videoTracks[1] : nil;
         
-        // Get video dimensions
-        AVAssetTrack* screenVideoTrack = [[screenTrack.asset tracksWithMediaType:AVMediaTypeVideo] firstObject];
+        NSLog(@"📹 Composition has %lu video track(s): screen=track[0], webcam=track[1]", (unsigned long)videoTracks.count);
+        
+        // Validate screen track has segments (content)
+        if (screenTrack.segments.count == 0) {
+            NSLog(@"❌ Screen track has no segments - composition invalid");
+            return nil;
+        }
+        
+        // Get video dimensions from the first segment's source track
+        AVCompositionTrackSegment* firstSegment = screenTrack.segments.firstObject;
+        if (firstSegment == nil) {
+            NSLog(@"❌ Screen track has no segments");
+            return nil;
+        }
+        
+        AVAssetTrack* screenVideoTrack = firstSegment.sourceTrack;
         if (screenVideoTrack == nil) {
-            NSLog(@"❌ No screen video track found");
+            NSLog(@"❌ No source track found in screen track segment");
             return nil;
         }
         
@@ -264,9 +340,15 @@ AVMutableVideoComposition* create_pip_composition(
             float pipX = renderSize.width * pip_x_percent;
             float pipY = renderSize.height * pip_y_percent;
             
-            // Get webcam track size for scaling
-            AVAssetTrack* webcamVideoTrack = [[webcamTrack.asset tracksWithMediaType:AVMediaTypeVideo] firstObject];
-            CGSize webcamSize = webcamVideoTrack ? webcamVideoTrack.naturalSize : renderSize;
+            // Get webcam track size for scaling from the first segment's source track
+            CGSize webcamSize = renderSize; // Default fallback
+            if (webcamTrack.segments.count > 0) {
+                AVCompositionTrackSegment* firstWebcamSegment = webcamTrack.segments.firstObject;
+                if (firstWebcamSegment != nil && firstWebcamSegment.sourceTrack != nil) {
+                    webcamSize = firstWebcamSegment.sourceTrack.naturalSize;
+                    NSLog(@"📹 Webcam source size: %.0fx%.0f", webcamSize.width, webcamSize.height);
+                }
+            }
             
             // Calculate scale to fit PiP size
             CGFloat pipScaleX = pipWidth / webcamSize.width;
@@ -419,8 +501,27 @@ ExportResult export_video_native_objc(
             strcpy(result.current_step, "Setting up export session...");
             
             // Debug: Log composition details
-            NSLog(@"📊 Composition duration: %f seconds", CMTimeGetSeconds(composition.duration));
-            NSLog(@"📊 Composition tracks: %lu", (unsigned long)composition.tracks.count);
+            NSArray<AVMutableCompositionTrack*>* compVideoTracks = [composition tracksWithMediaType:AVMediaTypeVideo];
+            NSArray<AVMutableCompositionTrack*>* compAudioTracks = [composition tracksWithMediaType:AVMediaTypeAudio];
+            
+            NSLog(@"📊 Composition details:");
+            NSLog(@"   Duration: %.2f seconds", CMTimeGetSeconds(composition.duration));
+            NSLog(@"   Video tracks: %lu", (unsigned long)compVideoTracks.count);
+            NSLog(@"   Audio tracks: %lu", (unsigned long)compAudioTracks.count);
+            
+            // Validate composition has at least one video track
+            if (compVideoTracks.count == 0) {
+                strcpy(result.error_message, "Composition has no video tracks - cannot export");
+                NSLog(@"❌ Composition validation failed: no video tracks");
+                return result;
+            }
+            
+            // Log details of each video track
+            for (NSUInteger i = 0; i < compVideoTracks.count; i++) {
+                AVMutableCompositionTrack* track = compVideoTracks[i];
+                NSLog(@"   Video track[%lu]: %lu segments, duration: %.2fs", 
+                    (unsigned long)i, (unsigned long)track.segments.count, CMTimeGetSeconds(track.timeRange.duration));
+            }
             
             // Create export session with compression preset (not Passthrough)
             AVAssetExportSession* exportSession = [AVAssetExportSession exportSessionWithAsset:composition 
@@ -536,15 +637,136 @@ ExportResult export_video_native_objc(
             dispatch_semaphore_wait(semaphore, DISPATCH_TIME_FOREVER);
             
             if (exportSuccess) {
+                // Validate output file was created and has reasonable size
+                NSString* outputPath = [NSString stringWithUTF8String:output_path];
+                NSFileManager* fileManager = [NSFileManager defaultManager];
+                NSDictionary* fileAttributes = [fileManager attributesOfItemAtPath:outputPath error:nil];
+                
+                if (fileAttributes == nil) {
+                    // File doesn't exist
+                    strcpy(result.error_message, "Export completed but output file was not created");
+                    NSLog(@"❌ Export reported success but file does not exist: %@", outputPath);
+                    result.success = false;
+                    return result;
+                }
+                
+                NSNumber* fileSize = fileAttributes[NSFileSize];
+                unsigned long long sizeBytes = [fileSize unsignedLongLongValue];
+                
+                // Minimum file size check: any valid video should be > 100KB
+                const unsigned long long MIN_FILE_SIZE = 100 * 1024; // 100KB
+                
+                if (sizeBytes < MIN_FILE_SIZE) {
+                    NSString* sizeStr = [NSByteCountFormatter stringFromByteCount:sizeBytes countStyle:NSByteCountFormatterCountStyleFile];
+                    NSString* errorMsg = [NSString stringWithFormat:@"Exported file is suspiciously small (%@). Export may have failed.", sizeStr];
+                    strncpy(result.error_message, [errorMsg UTF8String], sizeof(result.error_message) - 1);
+                    result.error_message[sizeof(result.error_message) - 1] = '\0';
+                    
+                    NSLog(@"❌ Export file too small: %@ (%.2f KB) - minimum expected: %.2f KB", 
+                        outputPath, sizeBytes / 1024.0, MIN_FILE_SIZE / 1024.0);
+                    result.success = false;
+                    return result;
+                }
+                
+                // Log successful export with file size
+                NSString* sizeStr = [NSByteCountFormatter stringFromByteCount:sizeBytes countStyle:NSByteCountFormatterCountStyleFile];
+                NSLog(@"✅ Native video export completed successfully: %@ (size: %@)", outputPath, sizeStr);
+                
                 result.success = true;
                 result.progress = 100.0;
                 strcpy(result.current_step, "Export completed successfully");
-                NSLog(@"✅ Native video export completed successfully");
             } else {
                 if (exportError != nil) {
-                    strncpy(result.error_message, [exportError.localizedDescription UTF8String], sizeof(result.error_message) - 1);
+                    // Build comprehensive error message
+                    NSMutableString* errorMsg = [NSMutableString string];
+                    
+                    // Main error description
+                    if (exportError.localizedDescription) {
+                        [errorMsg appendString:exportError.localizedDescription];
+                    }
+                    
+                    // Add error domain and code for debugging
+                    NSString* domain = exportError.domain;
+                    NSInteger code = exportError.code;
+                    
+                    if (domain && ![domain isEqualToString:@""]) {
+                        [errorMsg appendFormat:@" (Domain: %@, Code: %ld)", domain, (long)code];
+                    }
+                    
+                    // Add failure reason if available
+                    if (exportError.localizedFailureReason) {
+                        [errorMsg appendFormat:@". Reason: %@", exportError.localizedFailureReason];
+                    }
+                    
+                    // Add recovery suggestion if available
+                    if (exportError.localizedRecoverySuggestion) {
+                        [errorMsg appendFormat:@" Suggestion: %@", exportError.localizedRecoverySuggestion];
+                    }
+                    
+                    // Log detailed error for debugging
+                    NSLog(@"❌ Export failed - Domain: %@, Code: %ld", domain, (long)code);
+                    NSLog(@"❌ Error description: %@", exportError.localizedDescription);
+                    if (exportError.localizedFailureReason) {
+                        NSLog(@"❌ Failure reason: %@", exportError.localizedFailureReason);
+                    }
+                    if (exportError.userInfo) {
+                        NSLog(@"❌ Error userInfo: %@", exportError.userInfo);
+                    }
+                    
+                    // Also check export session status for additional context
+                    NSString* statusString = @"Unknown";
+                    switch (exportSession.status) {
+                        case AVAssetExportSessionStatusUnknown:
+                            statusString = @"Unknown";
+                            break;
+                        case AVAssetExportSessionStatusWaiting:
+                            statusString = @"Waiting";
+                            break;
+                        case AVAssetExportSessionStatusExporting:
+                            statusString = @"Exporting";
+                            break;
+                        case AVAssetExportSessionStatusCompleted:
+                            statusString = @"Completed";
+                            break;
+                        case AVAssetExportSessionStatusFailed:
+                            statusString = @"Failed";
+                            break;
+                        case AVAssetExportSessionStatusCancelled:
+                            statusString = @"Cancelled";
+                            break;
+                    }
+                    NSLog(@"❌ Export session status: %@", statusString);
+                    
+                    // Copy error message to result (truncate if too long)
+                    const char* errorCString = [errorMsg UTF8String];
+                    size_t errorLen = strlen(errorCString);
+                    size_t maxLen = sizeof(result.error_message) - 1;
+                    
+                    if (errorLen > maxLen) {
+                        // Truncate but try to keep it readable
+                        strncpy(result.error_message, errorCString, maxLen);
+                        result.error_message[maxLen] = '\0';
+                        NSLog(@"⚠️ Error message truncated to fit buffer size");
+                    } else {
+                        strncpy(result.error_message, errorCString, sizeof(result.error_message) - 1);
+                        result.error_message[sizeof(result.error_message) - 1] = '\0';
+                    }
                 } else {
-                    strcpy(result.error_message, "Export failed with unknown error");
+                    // No error object, check export session status
+                    NSString* statusString = @"Unknown";
+                    switch (exportSession.status) {
+                        case AVAssetExportSessionStatusCancelled:
+                            statusString = @"Cancelled";
+                            break;
+                        case AVAssetExportSessionStatusFailed:
+                            statusString = @"Failed";
+                            break;
+                        default:
+                            statusString = @"Unknown";
+                            break;
+                    }
+                    snprintf(result.error_message, sizeof(result.error_message),
+                            "Export failed with status: %s", [statusString UTF8String]);
                 }
                 NSLog(@"❌ Export failed: %s", result.error_message);
             }

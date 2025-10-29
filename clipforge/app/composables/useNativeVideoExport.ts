@@ -135,9 +135,71 @@ export const useNativeVideoExport = () => {
   const convertClipsToTauriFormat = async (clips: Clip[]): Promise<VideoClip[]> => {
     console.log('🔄 Converting clips to Tauri format:', clips)
     
-    const convertedClips = await Promise.all(clips.map(async (clip, index) => {
-      console.log(`📹 Clip ${index}:`, {
-        src: clip.src,
+    if (!clips || clips.length === 0) {
+      throw new Error('No clips provided for export')
+    }
+    
+    // Validate and determine clip types with better detection
+    const clipsWithTypes = clips.map((clip, index) => {
+      // Determine clip type with multiple fallback methods
+      let clipType = clip.metadata?.type
+      
+      if (!clipType) {
+        // Fallback 1: Check name for keywords
+        const name = (clip.name || '').toLowerCase()
+        if (name.includes('webcam') || name.includes('camera')) {
+          clipType = 'webcam'
+        } else if (name.includes('screen') || name.includes('recording')) {
+          clipType = 'screen'
+        }
+        // Fallback 2: Check track number (webcam = track 2, screen = track 1)
+        else if (clip.track === 2) {
+          clipType = 'webcam'
+        } else if (clip.track === 1) {
+          clipType = 'screen'
+        }
+        // Fallback 3: If still unknown, check if this looks like it could be webcam based on duration/size
+        else {
+          // Default to screen only if we can't determine - but log warning
+          console.warn(`⚠️ Clip ${index} has no explicit type, defaulting to 'screen'`, {
+            name: clip.name,
+            track: clip.track,
+            metadata: clip.metadata
+          })
+          clipType = 'screen'
+        }
+      }
+      
+      return {
+        ...clip,
+        _determinedType: clipType
+      }
+    })
+    
+    // Validate that we have at least one screen clip
+    const hasScreenClip = clipsWithTypes.some(c => c._determinedType === 'screen')
+    if (!hasScreenClip) {
+      console.error('❌ No screen recording found in clips:', clipsWithTypes.map(c => ({
+        name: c.name,
+        type: c._determinedType,
+        track: c.track
+      })))
+      throw new Error('No screen recording found. At least one screen recording is required for export.')
+    }
+    
+    // Log clip type summary
+    const screenClips = clipsWithTypes.filter(c => c._determinedType === 'screen')
+    const webcamClips = clipsWithTypes.filter(c => c._determinedType === 'webcam')
+    console.log(`📊 Clip summary: ${screenClips.length} screen clip(s), ${webcamClips.length} webcam clip(s)`)
+    
+    const convertedClips = await Promise.all(clipsWithTypes.map(async (clip, index) => {
+      const clipType = clip._determinedType!
+      
+      console.log(`📹 Clip ${index} [${clipType}]:`, {
+        name: clip.name,
+        src: clip.src?.substring(0, 50) + '...',
+        track: clip.track,
+        duration: clip.duration,
         pip_config: clip.pip_config,
         metadata: clip.metadata
       })
@@ -145,25 +207,30 @@ export const useNativeVideoExport = () => {
       // Handle different URL types by converting them to temporary files
       let clipPath = clip.src
       if (clip.src.startsWith('blob:')) {
-        console.log(`🔄 Converting blob URL to temp file for clip ${index}`)
+        console.log(`🔄 Converting blob URL to temp file for clip ${index} [${clipType}]`)
         clipPath = await convertBlobToTempFile(clip.src)
         console.log(`✅ Converted blob to temp file: ${clipPath}`)
       } else if (clip.src.startsWith('indexeddb://')) {
-        console.log(`🔄 Converting IndexedDB URL to temp file for clip ${index}`)
+        console.log(`🔄 Converting IndexedDB URL to temp file for clip ${index} [${clipType}]`)
         clipPath = await convertIndexedDBToTempFile(clip.src)
         console.log(`✅ Converted IndexedDB to temp file: ${clipPath}`)
       } else if (clip.src.startsWith('http://') || clip.src.startsWith('https://')) {
         // Handle Supabase or other HTTP URLs
-        console.log(`🔄 Converting HTTP URL to temp file for clip ${index}`)
+        console.log(`🔄 Converting HTTP URL to temp file for clip ${index} [${clipType}]`)
         clipPath = await convertBlobToTempFile(clip.src)
         console.log(`✅ Converted HTTP URL to temp file: ${clipPath}`)
+      } else if (clip.src.startsWith('/tmp/') || clip.src.startsWith('/')) {
+        // Already a file path, validate it exists
+        console.log(`📁 Clip ${index} [${clipType}] uses file path: ${clipPath}`)
+      } else {
+        console.warn(`⚠️ Clip ${index} [${clipType}] has unexpected src format: ${clip.src}`)
       }
       
       return {
         path: clipPath,
         start_time: clip.start_time || 0,
         duration: clip.duration,
-        clip_type: clip.metadata?.type || 'screen',
+        clip_type: clipType,
         pip_config: clip.pip_config && clip.pip_config.position ? {
           x: clip.pip_config.position.x,
           y: clip.pip_config.position.y,
@@ -173,6 +240,12 @@ export const useNativeVideoExport = () => {
         } : undefined
       }
     }))
+    
+    console.log('✅ Converted clips summary:', convertedClips.map(c => ({
+      type: c.clip_type,
+      path: c.path.substring(0, 50) + '...',
+      duration: c.duration
+    })))
     
     return convertedClips
   }
@@ -197,17 +270,36 @@ export const useNativeVideoExport = () => {
     totalSteps.value = 1
 
     try {
+      // Validate input
+      if (!clips || clips.length === 0) {
+        throw new Error('No clips provided for export')
+      }
+      
+      console.log(`🎬 Starting export with ${clips.length} clip(s)`)
+      
       // Check native export availability first
       const nativeAvailable = await checkNativeExportAvailability()
       if (!nativeAvailable) {
         throw new Error('Native video export is not available on this platform.')
       }
 
-      // Convert clips to Tauri format
+      // Convert clips to Tauri format (includes validation)
+      currentStep.value = 'Validating clips...'
       const tauriClips = await convertClipsToTauriFormat(clips)
       
       // Debug: Log the converted clips
-      console.log('🔄 Converted clips for export:', JSON.stringify(tauriClips, null, 2))
+      console.log('🔄 Converted clips for export:', JSON.stringify(tauriClips.map(c => ({
+        type: c.clip_type,
+        path: c.path.substring(0, 60) + '...',
+        duration: c.duration,
+        start_time: c.start_time
+      })), null, 2))
+      
+      // Final validation: Ensure we have a screen clip
+      const hasScreen = tauriClips.some(c => c.clip_type === 'screen')
+      if (!hasScreen) {
+        throw new Error('No screen recording found in clips. Export requires at least one screen recording.')
+      }
       
       // Prepare export settings
       const exportSettings: ExportSettings = {
@@ -236,10 +328,31 @@ export const useNativeVideoExport = () => {
 
     } catch (err: any) {
       console.error('❌ Native export failed:', err)
-      error.value = err.message || 'Export failed'
+      
+      // Parse error message to provide user-friendly feedback
+      let userMessage = err.message || 'Export failed'
+      
+      // Handle specific AVFoundation errors
+      if (err.message && err.message.includes('AVFoundationErrorDomain')) {
+        if (err.message.includes('-11823') || err.message.includes('already in use')) {
+          userMessage = 'The file name is already in use. ClipForge will automatically use a unique filename. Please try exporting again.'
+        } else if (err.message.includes('Domain') && err.message.includes('Code')) {
+          // Extract just the main error description if available
+          const descriptionMatch = err.message.match(/^(.*?)\s*\(Domain:/)
+          if (descriptionMatch && descriptionMatch[1]) {
+            userMessage = descriptionMatch[1].trim()
+          }
+        }
+      } else if (err.message && err.message.includes('Output directory')) {
+        userMessage = 'Cannot save to the selected location. Please check folder permissions or choose a different location.'
+      } else if (err.message && err.message.includes('not writable')) {
+        userMessage = 'Cannot write to Downloads folder. Please check folder permissions or choose a different location.'
+      }
+      
+      error.value = userMessage
       currentStep.value = 'Export failed'
       
-      return { success: false, error: err.message }
+      return { success: false, error: userMessage }
     } finally {
       isExporting.value = false
     }

@@ -116,44 +116,211 @@ pub async fn export_video_native(
     #[cfg(target_os = "macos")]
     {
         // Debug: Log received clips
-        println!("🔄 Received clips for export: {:?}", clips);
+        println!("🔄 Received {} clip(s) for export", clips.len());
+        for (i, clip) in clips.iter().enumerate() {
+            println!("  Clip {}: type={}, path={}, duration={}s, start_time={}", 
+                i, clip.clip_type, clip.path, clip.duration, clip.start_time);
+        }
         
         // Sort clips by timeline order
         let mut sorted_clips = clips;
         sorted_clips.sort_by(|a, b| a.start_time.partial_cmp(&b.start_time).unwrap());
+        
+        println!("📊 Clips sorted by timeline order");
 
         // Find screen and webcam clips
         let screen_clip = sorted_clips.iter().find(|c| c.clip_type == "screen");
         let webcam_clip = sorted_clips.iter().find(|c| c.clip_type == "webcam");
 
+        // Validate screen clip exists
         if screen_clip.is_none() {
-            return Err("No screen recording found".to_string());
+            println!("❌ No screen recording found in clips");
+            println!("   Available clip types: {:?}", 
+                sorted_clips.iter().map(|c| c.clip_type.as_str()).collect::<Vec<_>>());
+            return Err("No screen recording found. At least one screen recording is required for export.".to_string());
         }
 
         let screen_clip = screen_clip.unwrap();
+        
+        // Validate screen clip path exists
+        let screen_path_buf = std::path::Path::new(&screen_clip.path);
+        if !screen_path_buf.exists() {
+            println!("❌ Screen clip path does not exist: {}", screen_clip.path);
+            return Err(format!("Screen recording file not found: {}", screen_clip.path));
+        }
+        
+        println!("✅ Screen clip found: {}", screen_clip.path);
+        
+        // Validate webcam clip path if it exists
+        if let Some(ref webcam) = webcam_clip {
+            let webcam_path_buf = std::path::Path::new(&webcam.path);
+            if !webcam_path_buf.exists() {
+                println!("⚠️ Webcam clip path does not exist: {} (will continue without webcam)", webcam.path);
+            } else {
+                println!("✅ Webcam clip found: {}", webcam.path);
+            }
+        } else {
+            println!("ℹ️ No webcam clip found (exporting screen only)");
+        }
         
         // Convert strings to C strings
         let screen_path = string_to_c_string(&screen_clip.path);
         let webcam_path = webcam_clip.map(|c| string_to_c_string(&c.path));
         
+        // Sanitize filename to remove invalid characters
+        fn sanitize_filename(filename: &str) -> String {
+            filename
+                .chars()
+                .map(|c| match c {
+                    '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|' => '_',
+                    _ => c,
+                })
+                .collect::<String>()
+                .trim()
+                .to_string()
+        }
+        
         // Ensure output path is absolute and save to Downloads folder if relative
         let absolute_output_path = if output_path.starts_with('/') {
-            output_path.clone()
-        } else {
-            // Use Downloads folder as default save location
-            let home_dir = std::env::var("HOME")
-                .unwrap_or_else(|_| String::from("."));
-            let downloads_path = std::path::PathBuf::from(&home_dir)
-                .join("Downloads")
-                .join(&output_path);
-            
-            // Ensure Downloads directory exists
-            if let Some(parent) = downloads_path.parent() {
-                if let Err(e) = std::fs::create_dir_all(parent) {
-                    println!("⚠️ Warning: Could not create Downloads directory: {}", e);
+            // Validate absolute path exists
+            let mut path = std::path::PathBuf::from(&output_path);
+            if let Some(parent) = path.parent() {
+                if !parent.exists() {
+                    return Err(format!("Output directory does not exist: {}", parent.display()));
                 }
             }
             
+            // Generate unique filename if file already exists
+            let mut counter = 1;
+            while path.exists() {
+                // Extract base name and extension
+                let file_name = path.file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("export");
+                
+                let (base_name, ext) = if let Some(dot_pos) = file_name.rfind('.') {
+                    (&file_name[..dot_pos], &file_name[dot_pos..])
+                } else {
+                    (file_name, "")
+                };
+                
+                let unique_filename = format!("{}_({}){}", base_name, counter, ext);
+                
+                if let Some(parent) = path.parent() {
+                    path = parent.join(&unique_filename);
+                } else {
+                    path = std::path::PathBuf::from(&unique_filename);
+                }
+                
+                counter += 1;
+                
+                // Safety limit to prevent infinite loop
+                if counter > 1000 {
+                    return Err(format!(
+                        "Could not find available filename after 1000 attempts. Please delete existing files."
+                    ));
+                }
+            }
+            
+            if counter > 1 {
+                println!("📁 File already exists, using unique filename: {}", path.display());
+            }
+            
+            path.to_string_lossy().to_string()
+        } else {
+            // Use Downloads folder as default save location
+            let home_dir = std::env::var("HOME")
+                .map_err(|e| format!("Failed to get HOME directory: {}", e))?;
+            
+            let downloads_dir = std::path::PathBuf::from(&home_dir).join("Downloads");
+            
+            // Ensure Downloads directory exists
+            if !downloads_dir.exists() {
+                std::fs::create_dir_all(&downloads_dir)
+                    .map_err(|e| format!("Failed to create Downloads directory: {}", e))?;
+                println!("✅ Created Downloads directory: {}", downloads_dir.display());
+            }
+            
+            // Check if Downloads directory is writable
+            let metadata = std::fs::metadata(&downloads_dir)
+                .map_err(|e| format!("Failed to access Downloads directory: {}", e))?;
+            
+            if !metadata.permissions().readonly() {
+                // Try creating a test file to verify writability
+                let test_file = downloads_dir.join(".clipforge_test_write");
+                if std::fs::write(&test_file, b"test").is_err() {
+                    return Err(format!("Downloads directory is not writable: {}", downloads_dir.display()));
+                }
+                let _ = std::fs::remove_file(&test_file);
+            } else {
+                return Err(format!("Downloads directory is read-only: {}", downloads_dir.display()));
+            }
+            
+            // Sanitize the filename and ensure it has the correct extension
+            let sanitized_name = sanitize_filename(&output_path);
+            let filename = if sanitized_name.is_empty() {
+                "clipforge-export.mp4".to_string()
+            } else {
+                sanitized_name
+            };
+            
+            // Ensure filename has proper extension based on format
+            let extension = match settings.format.as_str() {
+                "mp4" | "mpeg4" => "mp4",
+                "mov" | "quicktime" => "mov",
+                "webm" => "webm",
+                "gif" => "gif",
+                "mp3" => "mp3",
+                _ => "mp4",
+            };
+            
+            let final_filename = if filename.ends_with(&format!(".{}", extension)) {
+                filename
+            } else {
+                // Remove any existing extension and add the correct one
+                if let Some(dot_pos) = filename.rfind('.') {
+                    format!("{}.{}", &filename[..dot_pos], extension)
+                } else {
+                    format!("{}.{}", filename, extension)
+                }
+            };
+            
+            // Generate unique filename if file already exists
+            let mut downloads_path = downloads_dir.join(&final_filename);
+            let mut counter = 1;
+            
+            // Keep trying with incremented suffix until we find a filename that doesn't exist
+            while downloads_path.exists() {
+                // Extract base name and extension
+                let base_name = if let Some(dot_pos) = final_filename.rfind('.') {
+                    &final_filename[..dot_pos]
+                } else {
+                    &final_filename
+                };
+                let ext = if let Some(dot_pos) = final_filename.rfind('.') {
+                    &final_filename[dot_pos..]
+                } else {
+                    ""
+                };
+                
+                let unique_filename = format!("{}_({}){}", base_name, counter, ext);
+                downloads_path = downloads_dir.join(&unique_filename);
+                counter += 1;
+                
+                // Safety limit to prevent infinite loop
+                if counter > 1000 {
+                    return Err(format!(
+                        "Could not find available filename after 1000 attempts. Please delete existing files in {}",
+                        downloads_dir.display()
+                    ));
+                }
+            }
+            
+            if counter > 1 {
+                println!("📁 File already exists, using unique filename: {}", downloads_path.display());
+            } else {
+                println!("📁 Output will be saved to: {}", downloads_path.display());
+            }
             downloads_path.to_string_lossy().to_string()
         };
         
