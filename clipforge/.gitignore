@@ -10,3 +10,38 @@ node_modules
 .cargo
 dist
 src-tauri/target
+
+# Media files - user-generated content
+*.mp4
+*.mov
+*.webm
+*.avi
+*.mkv
+*.m4v
+*.flv
+*.3gp
+*.wmv
+*.wav
+*.mp3
+*.flac
+*.ogg
+*.m4a
+*.aac
+
+# Large image files (keep small logos/icons)
+# Note: Large images or user-uploaded images should be excluded
+# Only keeping app icons/logos for now
+
+# User-generated media directories
+recordings/
+exports/
+media/
+videos/
+clips/
+temp/
+tmp/
+*.tmp
+
+# IndexedDB backups/exports
+*.blob
+*.bloburl

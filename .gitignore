@@ -1,0 +1,35 @@
+# Root level gitignore - prevents media files from being committed
+# Media files - user-generated content
+*.mp4
+*.mov
+*.webm
+*.avi
+*.mkv
+*.m4v
+*.flv
+*.3gp
+*.wmv
+*.wav
+*.mp3
+*.flac
+*.ogg
+*.m4a
+*.aac
+
+# User-generated media directories
+recordings/
+exports/
+media/
+videos/
+clips/
+temp/
+tmp/
+*.tmp
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Large binary files (except necessary dependencies like FFmpeg WASM)
+# FFmpeg WASM is kept as it's a required runtime dependency
+
