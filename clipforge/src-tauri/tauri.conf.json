@@ -47,12 +47,14 @@
 			{
 				"label": "main",
 				"title": "VidVeil - AI Video Editor",
-				"width": 1600,
-				"height": 1000,
-				"minWidth": 1280,
-				"minHeight": 720,
+				"width": 1400,
+				"height": 900,
+				"minWidth": 1024,
+				"minHeight": 768,
 				"resizable": true,
-				"fullscreen": false
+				"fullscreen": false,
+				"decorations": true,
+				"transparent": false
 			}
 		],
 		"security": {

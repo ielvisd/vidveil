@@ -8,13 +8,6 @@ export interface FFmpegProgress {
   speed: string
 }
 
-export interface ExportSettings {
-  resolution: string
-  quality: string
-  format: string
-  preset?: string
-}
-
 export const useFFmpeg = () => {
   const ffmpeg = ref<FFmpeg | null>(null)
   const isLoaded = ref(false)

@@ -40,3 +40,10 @@ export interface ProjectWithClips extends Project {
 	clips: Clip[]
 }
 
+export interface ExportSettings {
+	resolution: string
+	quality: string
+	format: string
+	preset?: string
+}
+

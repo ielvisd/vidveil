@@ -1,6 +1,6 @@
 import { ref } from 'vue'
-import type { Clip } from '../../types/project'
-import { useFFmpeg, type ExportSettings } from './useFFmpeg'
+import type { Clip, ExportSettings } from '../../types/project'
+import { useFFmpeg } from './useFFmpeg'
 import { planVideoComposition, executeCompositionPlan, createPipComposition, generateShapeSVG } from '~/utils/video-compositor'
 
 export const useExport = () => {

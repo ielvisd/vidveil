@@ -1,56 +1,69 @@
 <template>
-	<div class="library-page">
+	<div class="library-page min-h-screen bg-black flex flex-col">
 		<!-- Top Bar -->
-		<div class="top-bar">
-			<UButton 
-				@click="goBack" 
-				icon="i-heroicons-arrow-left" 
-				variant="ghost"
-				size="sm"
-			>
-				Back
-			</UButton>
-		<h1>Media Library</h1>
-		<UButton 
-			@click="handleAddToProject" 
-			:disabled="!canAddToProject || adding"
-			:loading="adding"
-			color="primary"
-			size="sm"
-		>
-			{{ adding ? 'Adding...' : 'Add to Project' }}
-		</UButton>
+		<div class="bg-zinc-900/50 border-b border-zinc-800 px-4 md:px-6 lg:px-8 py-4">
+			<div class="flex items-center justify-between gap-4">
+				<div class="flex items-center gap-4">
+					<UButton 
+						@click="goBack" 
+						icon="i-lucide-arrow-left" 
+						variant="ghost"
+						size="sm"
+						class="text-gray-300 hover:text-pink-500"
+					>
+						<span class="hidden sm:inline">Back</span>
+					</UButton>
+					<div>
+						<h1 class="text-xl md:text-2xl font-bold text-white">Media Library</h1>
+						<p class="text-sm text-gray-400 hidden sm:block">Browse and select media files</p>
+					</div>
+				</div>
+				<UButton 
+					@click="handleAddToProject" 
+					:disabled="!canAddToProject || adding"
+					:loading="adding"
+					color="primary"
+					size="sm"
+					icon="i-lucide-plus"
+				>
+					<span class="hidden sm:inline">{{ adding ? 'Adding...' : 'Add to Project' }}</span>
+					<span class="sm:hidden">Add</span>
+				</UButton>
+			</div>
 		</div>
 
 		<!-- Stats -->
-		<div class="stats-container">
-			<div class="stat-card">
-				<div class="stat-label">Total Files</div>
-				<div class="stat-value">{{ mediaCount }}</div>
-			</div>
-			<div class="stat-card">
-				<div class="stat-label">Total Size</div>
-				<div class="stat-value">{{ formatFileSize(totalSize) }}</div>
-			</div>
-			<div class="stat-card">
-				<div class="stat-label">Selected</div>
-				<div class="stat-value">{{ selectedMedia ? '1' : '0' }}</div>
-			</div>
+		<div class="grid grid-cols-3 gap-4 px-4 md:px-6 lg:px-8 py-6 bg-zinc-900/30 border-b border-zinc-800">
+			<UCard class="bg-zinc-900/50 border-zinc-800 text-center">
+				<div class="text-xs text-gray-400 mb-1">Total Files</div>
+				<div class="text-2xl md:text-3xl font-bold text-white">{{ mediaCount }}</div>
+			</UCard>
+			<UCard class="bg-zinc-900/50 border-zinc-800 text-center">
+				<div class="text-xs text-gray-400 mb-1">Total Size</div>
+				<div class="text-2xl md:text-3xl font-bold text-white">{{ formatFileSize(totalSize) }}</div>
+			</UCard>
+			<UCard class="bg-zinc-900/50 border-zinc-800 text-center" :class="{ 'border-pink-500/50': selectedMedia }">
+				<div class="text-xs text-gray-400 mb-1">Selected</div>
+				<div class="text-2xl md:text-3xl font-bold" :class="selectedMedia ? 'text-pink-500' : 'text-white'">{{ selectedMedia ? '1' : '0' }}</div>
+			</UCard>
 		</div>
 
 		<!-- Media Library Component -->
-		<div class="library-content">
+		<div class="flex-1 overflow-y-auto px-4 md:px-6 lg:px-8 py-6">
 			<LibraryMediaLibrary />
 		</div>
 	</div>
 </template>
 
 <script setup lang="ts">
+import { computed, ref, watchEffect, onMounted } from 'vue'
+import LibraryMediaLibrary from '~/components/library/MediaLibrary.vue'
+
 const route = useRoute()
 const router = useRouter()
 
 const { mediaFiles, selectedMedia, mediaCount, totalSize } = useMedia()
-const { currentProject } = useProject()
+const { currentProject, selectProject } = useProject()
 const { addClip } = useClips()
 
 const canAddToProject = computed(() => {
@@ -62,6 +75,16 @@ watchEffect(() => {
 	console.log('Library - currentProject:', currentProject.value?.id, currentProject.value?.name)
 	console.log('Library - selectedMedia:', selectedMedia.value?.name)
 	console.log('Library - canAddToProject:', canAddToProject.value)
+})
+
+// Load project from query param if provided (e.g., when coming from editor)
+onMounted(async () => {
+	const projectId = route.query.project as string | undefined
+	
+	if (projectId && !currentProject.value) {
+		console.log('📋 Loading project from query param:', projectId)
+		await selectProject(projectId)
+	}
 })
 
 const formatFileSize = (bytes: number): string => {
@@ -106,62 +129,3 @@ const goBack = () => {
 }
 </script>
 
-<style scoped>
-.library-page {
-	display: flex;
-	flex-direction: column;
-	height: 100vh;
-	background-color: rgb(17 24 39);
-	color: white;
-	overflow: hidden;
-}
-
-.top-bar {
-	display: flex;
-	align-items: center;
-	gap: 1rem;
-	padding: 0.75rem 1.5rem;
-	background-color: rgb(31 41 55);
-	border-bottom: 1px solid rgb(55 65 81);
-}
-
-.top-bar h1 {
-	flex: 1;
-	font-size: 1.125rem;
-	font-weight: 600;
-	margin: 0;
-}
-
-.stats-container {
-	display: grid;
-	grid-template-columns: repeat(3, 1fr);
-	gap: 1rem;
-	padding: 1.5rem;
-	background-color: rgb(17 24 39);
-}
-
-.stat-card {
-	background-color: rgb(31 41 55);
-	border-radius: 0.5rem;
-	padding: 1.25rem;
-	border: 1px solid rgb(55 65 81);
-}
-
-.stat-label {
-	font-size: 0.875rem;
-	color: rgb(156 163 175);
-	margin-bottom: 0.5rem;
-}
-
-.stat-value {
-	font-size: 1.875rem;
-	font-weight: 700;
-	color: white;
-}
-
-.library-content {
-	flex: 1;
-	overflow-y: auto;
-	padding: 0 1.5rem 1.5rem 1.5rem;
-}
-</style>

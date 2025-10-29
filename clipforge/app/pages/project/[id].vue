@@ -3,7 +3,7 @@
 		<!-- Authentication Loading -->
 		<div v-if="authLoading" class="loading-screen">
 			<div class="loading-content">
-				<LoadingSpinner />
+				<SharedLoadingSpinner />
 				<p>Checking authentication...</p>
 			</div>
 		</div>
@@ -34,6 +34,25 @@
 				<span class="clip-count">{{ clips.length }} clips</span>
 			</div>
 			<div class="top-actions">
+				<div class="undo-redo-group">
+					<UButton 
+						@click="handleUndo"
+						:disabled="!canUndo"
+						icon="i-heroicons-arrow-uturn-left"
+						variant="ghost"
+						size="sm"
+						title="Undo (Cmd/Ctrl+Z)"
+					/>
+					<UButton 
+						@click="handleRedo"
+						:disabled="!canRedo"
+						icon="i-heroicons-arrow-uturn-right"
+						variant="ghost"
+						size="sm"
+						title="Redo (Cmd/Ctrl+Shift+Z)"
+					/>
+				</div>
+				<div class="zoom-divider" />
 				<UButton 
 					@click="importMedia" 
 					icon="i-heroicons-film"
@@ -70,7 +89,7 @@
 						<h3>Media Library</h3>
 					</template>
 					<div v-if="loading" class="loading-state">
-						<LoadingSpinner size="sm" message="Loading clips..." />
+						<SharedLoadingSpinner size="sm" message="Loading clips..." />
 					</div>
 					<div v-else-if="clips.length === 0" class="empty-state">
 						<p>No clips yet</p>
@@ -262,6 +281,17 @@
 					</div>
 					<div class="timeline-controls">
 						<UButton 
+							@click="splitClipAtPlayhead"
+							:disabled="!canSplitClip"
+							icon="i-heroicons-scissors"
+							size="xs"
+							variant="ghost"
+							title="Split clip at playhead (S)"
+						>
+							Split
+						</UButton>
+						<div class="zoom-divider" />
+						<UButton 
 							@click="() => setZoom(0.5)"
 							size="xs"
 							variant="ghost"
@@ -337,10 +367,11 @@
 										:class="{ 
 											selected: selectedClip?.id === clip.id, 
 											dragging: draggingClipId === clip.id,
-											'drop-target': dropTargetIndex === index
+											'drop-target': dropTargetIndex === index,
+											trimming: trimmingClipId === clip.id
 										}"
 										:style="getClipStyle(clip, index)"
-										:draggable="true"
+										:draggable="!trimmingClipId"
 										style="display: block !important; visibility: visible !important; opacity: 1 !important;"
 										@dragstart="handleDragStart($event, clip, index)"
 										@dragend="handleDragEnd"
@@ -348,8 +379,26 @@
 										@drop="handleDrop($event, index)"
 										@click.stop="selectClip(clip)"
 									>
-										<span class="clip-label">{{ clip.name }}</span>
-										<span class="clip-duration-badge">{{ formatDuration(clip.duration) }}</span>
+										<!-- Left trim handle -->
+										<div 
+											class="trim-handle trim-handle-left"
+											:class="{ active: trimmingClipId === clip.id && trimmingHandle === 'start' }"
+											@mousedown.stop="handleTrimStart($event, clip, index)"
+											title="Trim start (drag to adjust)"
+										/>
+										
+										<div class="clip-content-wrapper">
+											<span class="clip-label">{{ clip.name }}</span>
+											<span class="clip-duration-badge">{{ formatDuration(clip.duration) }}</span>
+										</div>
+										
+										<!-- Right trim handle -->
+										<div 
+											class="trim-handle trim-handle-right"
+											:class="{ active: trimmingClipId === clip.id && trimmingHandle === 'end' }"
+											@mousedown.stop="handleTrimEnd($event, clip, index)"
+											title="Trim end (drag to adjust)"
+										/>
 									</div>
 								</template>
 								
@@ -360,35 +409,35 @@
 			</div>
 		</div>
 
+		<!-- Export Dialog - rendered outside main container to avoid clipping -->
+		<Teleport to="body">
+			<ExportDialog
+				v-if="showExportDialog"
+				:clips="clips"
+				:project-name="project?.name"
+				@close="showExportDialog = false"
+			/>
+		</Teleport>
 	</div>
-
-	<!-- Export Dialog - rendered outside main container to avoid clipping -->
-	<Teleport to="body">
-		<ExportDialog
-			v-if="showExportDialog"
-			:clips="clips"
-			:project-name="project?.name"
-			@close="showExportDialog = false"
-		/>
-	</Teleport>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
-import LoadingSpinner from '~/components/shared/LoadingSpinner.vue'
 
 const route = useRoute()
 const routeParamId = 'id' in route.params ? route.params.id : ''
 const projectId = (typeof routeParamId === 'string' ? routeParamId : Array.isArray(routeParamId) ? routeParamId[0] : '') as string
 
 const { currentProject, selectProject } = useProject()
-const { clips, addClip, fetchClips, loading: clipsLoading, reorderClips } = useClips()
+const { clips, addClip, fetchClips, loading: clipsLoading, reorderClips, updateClip } = useClips()
 const { isExporting, exportProgress, exportVideo } = useExport()
 const { currentTime, duration, isPlaying, togglePlay, seek, formatTime, setPlayheadPosition, initializePlayer } = usePlayer()
 const { zoomLevel, zoomIn, zoomOut, setZoom } = useTimeline()
 const { pipConfig, webcamClipId, applyShape: applyPipShape, updatePosition, removePip: removePipShape, setWebcamClip } = usePipShape()
 const { updateClipTimeline } = useClipArrangement()
 const { isAuthenticated, loading: authLoading, checkSession } = useAuth()
+const { trimClip, splitClip } = useClipEditing()
+const { canUndo, canRedo, addState, undo, redo, clearHistory } = useUndoRedo()
 
 const selectedClip = ref<any>(null)
 const activeClip = ref<any>(null)
@@ -411,8 +460,37 @@ const draggingClipId = ref<string | null>(null)
 const dragSourceIndex = ref<number | null>(null)
 const dropTargetIndex = ref<number | null>(null)
 
+// Trim state
+const trimmingClipId = ref<string | null>(null)
+const trimmingHandle = ref<'start' | 'end' | null>(null)
+const trimStartX = ref(0)
+const trimStartValue = ref(0)
+const originalClipData = ref<any>(null)
+
 const canExport = computed(() => clips.value.length > 0)
 const shapes = ['circle', 'square', 'heart', 'star', 'hexagon', 'rounded']
+
+// Check if we can split a clip at the current playhead
+const canSplitClip = computed(() => {
+	if (!selectedClip.value || clips.value.length === 0) return false
+	
+	// Find the clip at the current playhead position
+	const clipAtPlayhead = findClipAtTime(currentTime.value)
+	return clipAtPlayhead !== null && clipAtPlayhead.id === selectedClip.value.id
+})
+
+// Find clip that contains the given time
+const findClipAtTime = (time: number) => {
+	let cumulativeTime = 0
+	for (const clip of sortedClips.value) {
+		const clipDuration = clip.duration || 0
+		if (time >= cumulativeTime && time <= cumulativeTime + clipDuration) {
+			return clip
+		}
+		cumulativeTime += clipDuration
+	}
+	return null
+}
 
 const pixelsPerSecond = computed(() => 100 * zoomLevel.value) // Increased from 50 to 100
 
@@ -585,6 +663,26 @@ const handleKeyPress = (event: KeyboardEvent) => {
 				removeClip()
 			}
 			break
+		case 's':
+		case 'S':
+			if (canSplitClip.value) {
+				event.preventDefault()
+				splitClipAtPlayhead()
+			}
+			break
+		case 'z':
+		case 'Z':
+			if (event.metaKey || event.ctrlKey) {
+				event.preventDefault()
+				if (event.shiftKey) {
+					// Cmd/Ctrl+Shift+Z = Redo
+					handleRedo()
+				} else {
+					// Cmd/Ctrl+Z = Undo
+					handleUndo()
+				}
+			}
+			break
 		case 'ArrowUp':
 			if (selectedClip.value) {
 				event.preventDefault()
@@ -709,6 +807,11 @@ onMounted(async () => {
 			
 			console.log('✅ Loaded', clips.value.length, 'clip(s)')
 			
+			// Initialize undo history with current clips
+			if (clips.value.length > 0) {
+				addState([...clips.value], 'load')
+			}
+			
 			// Auto-select first non-webcam clip as main video
 			const screenClip = clips.value.find((c: any) => c.metadata?.type !== 'webcam')
 			const webcam = clips.value.find((c: any) => c.metadata?.type === 'webcam')
@@ -743,25 +846,31 @@ onMounted(async () => {
 	}
 })
 
-// Watch for clip changes and log visibility
-watch(sortedClips, (newClips) => {
-	console.log(`🔄 Clips changed: ${newClips.length} clips`)
-	if (newClips.length > 0) {
-		// Use nextTick to ensure DOM is updated
-		nextTick(() => {
-			const clipElements = document.querySelectorAll('.timeline-clip')
-			console.log(`🎯 Found ${clipElements.length} clip elements in DOM`)
-			clipElements.forEach((el, index) => {
-				const rect = el.getBoundingClientRect()
-				console.log(`📐 Clip ${index}: visible=${rect.width > 0 && rect.height > 0}, pos=(${rect.left}, ${rect.top}), size=(${rect.width}x${rect.height})`)
-			})
-		})
+// Debounce function for performance
+const debounce = <T extends (...args: any[]) => any>(fn: T, delay: number) => {
+	let timeoutId: ReturnType<typeof setTimeout> | null = null
+	return (...args: Parameters<T>) => {
+		if (timeoutId) clearTimeout(timeoutId)
+		timeoutId = setTimeout(() => fn(...args), delay)
 	}
-}, { immediate: true })
+}
+
+// Watch for clip changes (debounced for performance)
+const handleClipsChange = debounce((newClips: any[]) => {
+	// Only log in development
+	if (import.meta.dev && newClips.length > 0) {
+		console.log(`🔄 Clips changed: ${newClips.length} clips`)
+	}
+}, 100)
+
+watch(sortedClips, handleClipsChange, { immediate: false })
 
 onUnmounted(() => {
 	window.removeEventListener('keydown', handleKeyPress)
 	window.removeEventListener('resize', updateContainerSize)
+	// Cleanup trim handlers
+	document.removeEventListener('mousemove', handleTrimMove)
+	document.removeEventListener('mouseup', handleTrimEndUp)
 })
 
 const formatDuration = (seconds: number | undefined): string => {
@@ -771,28 +880,48 @@ const formatDuration = (seconds: number | undefined): string => {
 	return `${mins}:${secs.toString().padStart(2, '0')}`
 }
 
+// Memoize clip positions to avoid recalculating on every render
+const clipPositions = computed(() => {
+	const positions = new Map<string, { left: number; width: number }>()
+	let cumulativeTime = 0
+	
+	sortedClips.value.forEach((clip, index) => {
+		const duration = clip.duration || 10
+		const widthPixels = Math.max(duration * pixelsPerSecond.value, 80)
+		positions.set(clip.id, {
+			left: cumulativeTime * pixelsPerSecond.value,
+			width: widthPixels
+		})
+		cumulativeTime += duration
+	})
+	
+	return positions
+})
+
 const getClipStyle = (clip: any, index: number) => {
-	// Calculate position based on timeline order (seamless stitching)
-	let startTime = 0
-	for (let i = 0; i < index; i++) {
-		const prevClip = sortedClips.value[i]
-		if (prevClip) {
-			startTime += prevClip.duration
+	const position = clipPositions.value.get(clip.id)
+	if (!position) {
+		// Fallback calculation if not in cache
+		let startTime = 0
+		for (let i = 0; i < index; i++) {
+			const prevClip = sortedClips.value[i]
+			if (prevClip) {
+				startTime += prevClip.duration || 0
+			}
+		}
+		const duration = clip.duration || 10
+		const widthPixels = Math.max(duration * pixelsPerSecond.value, 80)
+		return {
+			transform: `translateX(${startTime * pixelsPerSecond.value}px)`,
+			width: `${widthPixels}px`,
 		}
 	}
 	
-	const duration = clip.duration || 10
-	const widthPixels = Math.max(duration * pixelsPerSecond.value, 80) // Minimum 80px width
-	
-	const style = {
-		left: `${startTime * pixelsPerSecond.value}px`,
-		top: '10px', // EXPLICIT positioning to prevent parent offset issues
-		width: `${widthPixels}px`,
+	// Use CSS transform for better performance (GPU accelerated)
+	return {
+		transform: `translateX(${position.left}px)`,
+		width: `${position.width}px`,
 	}
-	
-	console.log(`🎨 Clip[${index}] style:`, style)
-	
-	return style
 }
 
 const handleTimelineClick = (event: MouseEvent) => {
@@ -834,6 +963,9 @@ const handleDrop = async (event: DragEvent, targetIndex: number) => {
 	
 	// Recalculate start times with snapping
 	await updateClipTimeline(newOrder)
+	
+	// Add to undo history
+	addState([...clips.value], 'reorder')
 }
 
 const handleDragEnd = () => {
@@ -842,8 +974,121 @@ const handleDragEnd = () => {
 	dropTargetIndex.value = null
 }
 
+// Trim handlers
+const handleTrimStart = (event: MouseEvent, clip: any, index: number) => {
+	event.preventDefault()
+	event.stopPropagation()
+	
+	trimmingClipId.value = clip.id
+	trimmingHandle.value = 'start'
+	trimStartX.value = event.clientX
+	trimStartValue.value = clip.start_time || 0
+	originalClipData.value = { ...clip }
+	
+	// Prevent clip drag while trimming
+	document.addEventListener('mousemove', handleTrimMove)
+	document.addEventListener('mouseup', handleTrimEndUp)
+}
+
+const handleTrimEnd = (event: MouseEvent, clip: any, index: number) => {
+	event.preventDefault()
+	event.stopPropagation()
+	
+	trimmingClipId.value = clip.id
+	trimmingHandle.value = 'end'
+	trimStartX.value = event.clientX
+	trimStartValue.value = clip.end_time || clip.duration || 0
+	originalClipData.value = { ...clip }
+	
+	// Prevent clip drag while trimming
+	document.addEventListener('mousemove', handleTrimMove)
+	document.addEventListener('mouseup', handleTrimEndUp)
+}
+
+const handleTrimMove = async (event: MouseEvent) => {
+	if (!trimmingClipId.value || !trimmingHandle.value || !trackContainer.value || !originalClipData.value) return
+	
+	const clip = clips.value.find((c: any) => c.id === trimmingClipId.value)
+	if (!clip) return
+	
+	const deltaX = event.clientX - trimStartX.value
+	const deltaTime = deltaX / pixelsPerSecond.value
+	
+	// Get original clip data for bounds
+	const originalFullDuration = originalClipData.value.duration || 0
+	const originalStart = originalClipData.value.start_time || 0
+	const originalEnd = originalClipData.value.end_time || originalFullDuration
+	
+	if (trimmingHandle.value === 'start') {
+		// Trimming start: increase start_time (cut from beginning)
+		// Delta time positive = dragging right = increase start (skip more)
+		const currentStart = originalClipData.value.start_time || 0
+		const newStart = Math.max(0, Math.min(
+			currentStart + deltaTime,
+			originalEnd - 0.1 // Minimum 0.1s duration
+		))
+		
+		// Update clip with new start time
+		const trimmedClip = trimClip(originalClipData.value, newStart, originalEnd)
+		
+		// Update in local state immediately for real-time preview
+		const clipArrayIndex = clips.value.findIndex((c: any) => c.id === clip.id)
+		if (clipArrayIndex !== -1) {
+			clips.value[clipArrayIndex] = { ...trimmedClip }
+		}
+	} else if (trimmingHandle.value === 'end') {
+		// Trimming end: decrease end_time (cut from end)
+		// Delta time negative = dragging left = decrease end (cut more)
+		const newEnd = Math.max(
+			originalStart + 0.1, // Minimum 0.1s duration
+			Math.min(originalFullDuration, originalEnd + deltaTime)
+		)
+		
+		// Update clip with new end time
+		const trimmedClip = trimClip(originalClipData.value, originalStart, newEnd)
+		
+		// Update in local state immediately for real-time preview
+		const clipArrayIndex = clips.value.findIndex((c: any) => c.id === clip.id)
+		if (clipArrayIndex !== -1) {
+			clips.value[clipArrayIndex] = { ...trimmedClip }
+		}
+	}
+}
+
+const handleTrimEndUp = async () => {
+	if (!trimmingClipId.value) return
+	
+	// Save trim to database
+	const clip = clips.value.find((c: any) => c.id === trimmingClipId.value)
+	if (clip) {
+		await updateClip(clip.id, {
+			start_time: clip.start_time,
+			end_time: clip.end_time,
+			duration: clip.duration
+		})
+		
+		// Add to undo history after trim completes
+		addState([...clips.value], 'trim')
+	}
+	
+	// Cleanup
+	trimmingClipId.value = null
+	trimmingHandle.value = null
+	trimStartX.value = 0
+	trimStartValue.value = 0
+	originalClipData.value = null
+	
+	// Remove event listeners
+	document.removeEventListener('mousemove', handleTrimMove)
+	document.removeEventListener('mouseup', handleTrimEndUp)
+}
+
 const importMedia = () => {
-	navigateTo('/library')
+	if (projectId) {
+		navigateTo(`/library?project=${projectId}`)
+	} else {
+		navigateTo('/library')
+	}
 }
 
 const startRecording = () => {
@@ -862,6 +1107,9 @@ const applyShape = (shape: string) => {
 
 const removeClip = async () => {
 	if (!selectedClip.value) return
+	
+	// Save state before deletion
+	addState([...clips.value], 'delete')
 	
 	const { deleteClip } = useClips()
 	await deleteClip(selectedClip.value.id)
@@ -906,6 +1154,124 @@ const handleExport = () => {
 	if (!canExport.value) return
 	showExportDialog.value = true
 }
+
+// Undo/Redo handlers
+const handleUndo = async () => {
+	const previousState = undo()
+	if (previousState && projectId) {
+		// Restore clips from history
+		// Note: This is a simplified version - in production you'd want to sync with database
+		clips.value = previousState
+		
+		// Optionally sync with database (could be expensive for large histories)
+		// For now, we'll just update local state
+		console.log('↶ Undo:', previousState.length, 'clips')
+	}
+}
+
+const handleRedo = async () => {
+	const nextState = redo()
+	if (nextState && projectId) {
+		// Restore clips from history
+		clips.value = nextState
+		console.log('↷ Redo:', nextState.length, 'clips')
+	}
+}
+
+// Initialize undo history when clips are loaded
+watch(clips, (newClips, oldClips) => {
+	// Only add to history if clips actually changed (avoid initial load triggering history)
+	if (oldClips && oldClips.length > 0 && newClips.length !== oldClips.length) {
+		// Don't track programmatic changes
+		return
+	}
+}, { deep: true })
+
+// Split clip at current playhead position
+const splitClipAtPlayhead = async () => {
+	if (!selectedClip.value || !canSplitClip.value) return
+	
+	// Calculate the split time relative to the clip's start in the timeline
+	const clipIndex = sortedClips.value.findIndex((c: any) => c.id === selectedClip.value.id)
+	if (clipIndex === -1) return
+	
+	// Calculate timeline position of this clip
+	let timelineStart = 0
+	for (let i = 0; i < clipIndex; i++) {
+		timelineStart += sortedClips.value[i].duration || 0
+	}
+	
+	// Calculate split time relative to the clip's source
+	const splitTime = currentTime.value - timelineStart + (selectedClip.value.start_time || 0)
+	
+	// Split the clip
+	const splitResult = splitClip(selectedClip.value, splitTime)
+	
+	if (splitResult.length === 1) {
+		// Split didn't happen (invalid split point)
+		console.warn('Cannot split clip at this position')
+		return
+	}
+	
+	const [firstPart, secondPart] = splitResult
+	
+	// Update first part in place
+	await updateClip(firstPart.id, {
+		start_time: firstPart.start_time,
+		end_time: firstPart.end_time,
+		duration: firstPart.duration
+	})
+	
+	// Add second part as a new clip
+	const supabase = useSupabaseClient()
+	const newClipData = {
+		id: secondPart.id,
+		project_id: projectId,
+		name: `${selectedClip.value.name} (Part 2)`,
+		src: secondPart.src,
+		duration: secondPart.duration,
+		start_time: secondPart.start_time,
+		end_time: secondPart.end_time,
+		track: selectedClip.value.track || 1,
+		metadata: {
+			...selectedClip.value.metadata,
+			order: clipIndex + 1
+		}
+	}
+	
+	const { data, error } = await supabase
+		.from('clips')
+		.insert(newClipData)
+		.select()
+		.single()
+	
+	if (error) {
+		console.error('Failed to create split clip:', error)
+		return
+	}
+	
+	// Refresh clips to show the split
+	await fetchClips(projectId)
+	
+	// Update order metadata for subsequent clips
+	for (let i = clipIndex + 2; i < sortedClips.value.length; i++) {
+		await updateClip(sortedClips.value[i].id, {
+			metadata: {
+				...sortedClips.value[i].metadata,
+				order: i + 1
+			}
+		})
+	}
+	
+	// Add to undo history after split
+	addState([...clips.value], 'split')
+	
+	// Select the second part
+	const newClip = clips.value.find((c: any) => c.id === secondPart.id)
+	if (newClip) {
+		selectedClip.value = newClip
+	}
+}
 </script>
 
 <style scoped>
@@ -913,7 +1279,7 @@ const handleExport = () => {
 	display: flex;
 	flex-direction: column;
 	height: 100vh;
-	background-color: rgb(17 24 39);
+	background-color: #000000;
 	color: white;
 }
 
@@ -961,8 +1327,8 @@ const handleExport = () => {
 	align-items: center;
 	gap: 1rem;
 	padding: 0.75rem 1.5rem;
-	background-color: rgb(31 41 55);
-	border-bottom: 1px solid rgb(55 65 81);
+	background-color: rgb(10 10 10);
+	border-bottom: 1px solid rgb(63 63 70 / 0.5);
 }
 
 .project-info {
@@ -986,6 +1352,19 @@ const handleExport = () => {
 .top-actions {
 	display: flex;
 	gap: 0.5rem;
+	align-items: center;
+}
+
+.undo-redo-group {
+	display: flex;
+	gap: 0.25rem;
+}
+
+.action-divider {
+	width: 1px;
+	height: 24px;
+	background-color: rgb(55 65 81);
+	margin: 0 0.25rem;
 }
 
 /* Main Layout */
@@ -1001,8 +1380,8 @@ const handleExport = () => {
 .left-sidebar {
 	grid-column: 1;
 	grid-row: 1;
-	background-color: rgb(31 41 55);
-	border-right: 1px solid rgb(55 65 81);
+	background-color: rgb(10 10 10);
+	border-right: 1px solid rgb(63 63 70 / 0.5);
 	overflow-y: auto;
 	padding: 1rem;
 	display: flex;
@@ -1082,21 +1461,24 @@ const handleExport = () => {
 	align-items: center;
 	gap: 0.75rem;
 	padding: 0.75rem;
-	background-color: rgb(55 65 81);
+	background-color: rgb(24 24 27);
 	border-radius: 0.375rem;
+	border: 1px solid rgb(39 39 42);
 	cursor: pointer;
 	transition: all 0.2s ease;
 	animation: slideIn 0.2s ease;
 }
 
 .clip-item:hover {
-	background-color: rgb(75 85 99);
+	background-color: rgb(39 39 42);
+	border-color: rgb(255 20 147 / 0.3);
 	transform: translateX(4px);
 }
 
 .clip-item.active {
-	background-color: rgb(59 130 246);
-	box-shadow: 0 0 0 2px rgb(59 130 246 / 0.3);
+	background-color: rgb(255 20 147 / 0.2);
+	border-color: rgb(255 20 147 / 0.5);
+	box-shadow: 0 0 0 2px rgb(255 20 147 / 0.3);
 }
 
 @keyframes slideIn {
@@ -1113,12 +1495,13 @@ const handleExport = () => {
 .clip-thumbnail {
 	width: 48px;
 	height: 48px;
-	background-color: rgb(31 41 55);
+	background-color: rgb(10 10 10);
 	border-radius: 0.25rem;
 	display: flex;
 	align-items: center;
 	justify-content: center;
 	flex-shrink: 0;
+	border: 1px solid rgb(39 39 42);
 }
 
 .clip-info {
@@ -1241,7 +1624,7 @@ const handleExport = () => {
 	width: 0;
 	height: 0;
 	border-radius: 50%;
-	background-color: rgba(59, 130, 246, 0.3);
+	background-color: rgba(255, 20, 147, 0.3);
 	transform: translate(-50%, -50%);
 	transition: width 0.3s, height 0.3s;
 }
@@ -1267,7 +1650,7 @@ const handleExport = () => {
 	grid-row: 1;
 	display: flex;
 	flex-direction: column;
-	background-color: rgb(17 24 39);
+	background-color: #000000;
 }
 
 .video-container {
@@ -1325,7 +1708,7 @@ const handleExport = () => {
 	position: absolute;
 	top: 1rem;
 	right: 1rem;
-	background-color: rgb(59 130 246);
+	background-color: rgb(255 20 147);
 	color: white;
 	padding: 0.5rem 1rem;
 	border-radius: 0.375rem;
@@ -1339,8 +1722,8 @@ const handleExport = () => {
 	align-items: center;
 	gap: 1rem;
 	padding: 1rem 1.5rem;
-	background-color: rgb(31 41 55);
-	border-top: 1px solid rgb(55 65 81);
+	background-color: rgb(10 10 10);
+	border-top: 1px solid rgb(63 63 70 / 0.5);
 }
 
 .controls-left, .controls-right {
@@ -1371,7 +1754,7 @@ const handleExport = () => {
 	width: 12px;
 	height: 12px;
 	border-radius: 50%;
-	background: rgb(59 130 246);
+	background: rgb(255 20 147);
 	cursor: pointer;
 }
 
@@ -1379,7 +1762,7 @@ const handleExport = () => {
 	width: 12px;
 	height: 12px;
 	border-radius: 50%;
-	background: rgb(59 130 246);
+	background: rgb(255 20 147);
 	cursor: pointer;
 	border: none;
 }
@@ -1410,8 +1793,8 @@ const handleExport = () => {
 .timeline-container {
 	grid-column: 1 / -1;
 	grid-row: 2;
-	background-color: rgb(31 41 55);
-	border-top: 1px solid rgb(55 65 81);
+	background-color: rgb(10 10 10);
+	border-top: 1px solid rgb(63 63 70 / 0.5);
 	display: flex;
 	flex-direction: column;
 	overflow-x: auto; /* Allow horizontal scroll for long timelines */
@@ -1445,7 +1828,7 @@ const handleExport = () => {
 
 .total-duration {
 	font-weight: 500;
-	color: rgb(59 130 246);
+	color: rgb(255 20 147);
 }
 
 .clip-count-badge {
@@ -1462,7 +1845,7 @@ const handleExport = () => {
 }
 
 .active-zoom {
-	background-color: rgb(59 130 246) !important;
+	background-color: rgb(255 20 147) !important;
 	color: white !important;
 }
 
@@ -1494,7 +1877,7 @@ const handleExport = () => {
 
 .ruler-wrapper {
 	display: flex;
-	background-color: rgb(17 24 39);
+	background-color: #000000;
 }
 
 .ruler-spacer {
@@ -1512,13 +1895,14 @@ const handleExport = () => {
 .track-header {
 	width: 120px;
 	padding: 1rem;
-	background-color: rgb(17 24 39);
-	border-right: 1px solid rgb(55 65 81);
+	background-color: #000000;
+	border-right: 1px solid rgb(63 63 70 / 0.5);
 	display: flex;
 	align-items: center;
 	font-size: 0.875rem;
 	font-weight: 500;
 	flex-shrink: 0;
+	color: white;
 }
 
 .track-content {
@@ -1528,29 +1912,46 @@ const handleExport = () => {
 	padding: 0.5rem 0;
 	height: 100%;
 	overflow: visible;
+	contain: layout style paint; /* CSS containment for performance */
 }
 
 .timeline-clip {
 	position: absolute;
 	height: 100px;
 	top: 20px; /* Fixed position from top */
-	background: linear-gradient(135deg, rgb(59 130 246) 0%, rgb(37 99 235) 100%);
+	left: 0; /* Use transform instead of left for positioning */
+	background: linear-gradient(135deg, rgb(255 20 147) 0%, rgb(219 39 119) 100%);
 	border-radius: 0.25rem;
+	border: 1px solid rgb(255 20 147 / 0.3);
 	cursor: grab;
 	display: flex;
 	align-items: center;
-	padding: 0 0.75rem;
-	transition: all 0.2s ease;
+	padding: 0;
+	transition: transform 0.2s ease, width 0.2s ease; /* Only animate transform and width */
 	min-width: 80px;
 	box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 	box-sizing: border-box;
 	z-index: 100 !important; /* Force to top */
+	will-change: transform; /* Hint to browser for GPU acceleration */
+}
+
+.timeline-clip.trimming {
+	cursor: ew-resize !important;
+}
+
+.clip-content-wrapper {
+	flex: 1;
+	display: flex;
+	align-items: center;
+	padding: 0 0.75rem;
+	gap: 0.5rem;
+	min-width: 0;
 }
 
 .timeline-clip:hover {
-	border-color: rgb(147 197 253);
+	border-color: rgb(255 20 147 / 0.7);
 	transform: translateY(-2px);
-	box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+	box-shadow: 0 4px 8px rgba(255, 20, 147, 0.3);
 }
 
 .timeline-clip:active {
@@ -1607,17 +2008,17 @@ const handleExport = () => {
 }
 
 .timeline-clip.selected {
-	border-color: rgb(253 224 71);
-	box-shadow: 0 0 0 2px rgb(253 224 71 / 0.3), 0 4px 12px rgba(0, 0, 0, 0.3);
+	border-color: rgb(255 20 147);
+	box-shadow: 0 0 0 3px rgb(255 20 147 / 0.4), 0 4px 12px rgba(255, 20, 147, 0.3);
 	animation: pulse 2s ease-in-out infinite;
 }
 
 @keyframes pulse {
 	0%, 100% {
-		box-shadow: 0 0 0 2px rgb(253 224 71 / 0.3), 0 4px 12px rgba(0, 0, 0, 0.3);
+		box-shadow: 0 0 0 3px rgb(255 20 147 / 0.4), 0 4px 12px rgba(255, 20, 147, 0.3);
 	}
 	50% {
-		box-shadow: 0 0 0 4px rgb(253 224 71 / 0.5), 0 4px 12px rgba(0, 0, 0, 0.3);
+		box-shadow: 0 0 0 5px rgb(255 20 147 / 0.6), 0 4px 12px rgba(255, 20, 147, 0.4);
 	}
 }
 
@@ -1627,5 +2028,55 @@ const handleExport = () => {
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
+	flex: 1;
+}
+
+.trim-handle {
+	width: 8px;
+	height: 100%;
+	background-color: rgba(251, 191, 36, 0.6);
+	border: 1px solid rgba(251, 191, 36, 0.8);
+	cursor: ew-resize;
+	transition: all 0.2s ease;
+	flex-shrink: 0;
+	z-index: 10;
+	position: relative;
+}
+
+.trim-handle-left {
+	border-top-left-radius: 0.25rem;
+	border-bottom-left-radius: 0.25rem;
+	border-right: none;
+}
+
+.trim-handle-right {
+	border-top-right-radius: 0.25rem;
+	border-bottom-right-radius: 0.25rem;
+	border-left: none;
+}
+
+.trim-handle:hover {
+	background-color: rgba(251, 191, 36, 0.9);
+	border-color: rgb(251, 191, 36);
+	width: 10px;
+}
+
+.trim-handle.active {
+	background-color: rgb(251, 191, 36);
+	border-color: rgb(234, 179, 8);
+	width: 12px;
+	box-shadow: 0 0 8px rgba(251, 191, 36, 0.6);
+}
+
+.trim-handle::after {
+	content: '';
+	position: absolute;
+	top: 50%;
+	left: 50%;
+	transform: translate(-50%, -50%);
+	width: 2px;
+	height: 60%;
+	background-color: rgba(0, 0, 0, 0.5);
+	border-radius: 1px;
 }
 </style>

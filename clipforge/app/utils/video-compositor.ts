@@ -1,5 +1,4 @@
-import type { Clip } from '~/types/project'
-import type { ExportSettings } from '../composables/useFFmpeg'
+import type { Clip, ExportSettings } from '~/types/project'
 import { 
   generateConcatCommand, 
   generatePipOverlayCommand, 

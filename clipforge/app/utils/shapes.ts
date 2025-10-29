@@ -1,4 +1,4 @@
-export type PredefinedShape = 'circle' | 'square' | 'heart' | 'hex' | 'star' | 'diamond' | 'triangle' | 'pentagon' | 'octagon' | 'ellipse'
+export type PredefinedShape = 'circle' | 'square' | 'heart' | 'hex' | 'star' | 'diamond' | 'triangle' | 'pentagon' | 'octagon' | 'ellipse' | 'rounded'
 
 export const SHAPE_LIBRARY: Record<PredefinedShape, any> = {
 	circle: {
@@ -50,6 +50,11 @@ export const SHAPE_LIBRARY: Record<PredefinedShape, any> = {
 		type: 'ellipse',
 		svg: `<ellipse cx="50" cy="50" rx="40" ry="30" />`,
 		description: 'Ellipse shape'
+	},
+	rounded: {
+		type: 'rounded',
+		svg: `<rect x="5" y="5" width="90" height="90" rx="20" ry="20" />`,
+		description: 'Rounded rectangle'
 	}
 }
 

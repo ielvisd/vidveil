@@ -1,9 +1,8 @@
 import { ref, computed } from 'vue'
-
-export type PredefinedShape = 'circle' | 'square' | 'heart' | 'hex' | 'star' | 'diamond' | 'triangle' | 'pentagon' | 'octagon' | 'ellipse' | 'rounded'
+import type { PredefinedShape } from '~/utils/shapes'
 
 export interface PipShapeConfig {
-	shape: PredefinedShape | 'rounded'
+	shape: PredefinedShape
 	width: number
 	height: number
 	x: number // Position percentage (0-100)
@@ -21,7 +20,7 @@ export const usePipShape = () => {
 	const webcamClipId = ref<string | null>(null)
 	const isActive = computed(() => pipConfig.value !== null)
 
-	const applyShape = (shape: PredefinedShape | 'rounded', clipId?: string) => {
+	const applyShape = (shape: PredefinedShape, clipId?: string) => {
 		// Default position: bottom-right corner with proper pixel coordinates
 		// Note: These will be adjusted based on actual container size in the component
 		globalPipConfig.value = {

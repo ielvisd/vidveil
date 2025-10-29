@@ -4,6 +4,11 @@
       "command": "node",
       "args": ["node_modules/@socketsecurity/mcp/dist/index.js"],
       "description": "Socket Security MCP for dependency scanning and npm package management"
+    },
+    "nuxt-ui": {
+      "type": "http",
+      "url": "https://ui.nuxt.com/mcp",
+      "description": "Nuxt UI MCP server for component documentation and examples"
     }
   }
 }

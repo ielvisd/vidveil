@@ -1,125 +1,108 @@
 <template>
-	<UContainer class="home-page">
-		<div class="hero-section">
-			<h1 class="hero-title">VidVeil</h1>
-			<p class="hero-subtitle">AI-Powered Video Editor with PiP Magic</p>
-		<div class="cta-buttons">
-			<UButton to="/projects" size="xl" color="primary">
-				My Projects
-			</UButton>
-			<UButton to="/library" size="xl" variant="outline">
-				Import Media
-			</UButton>
-			<UButton to="/login" size="xl" variant="soft">
-				Login
-			</UButton>
-		</div>
-		</div>
+	<div class="home-page">
+		<UPageHero
+			headline="AI-Powered Video Editor"
+			title="VidVeil"
+			description="Create stunning tutorials with AI-assisted picture-in-picture overlays. Record, edit, and export polished videos with effortless masking and natural language shape generation."
+			:links="heroLinks"
+			orientation="vertical"
+			class="text-center"
+		>
+			<template #default>
+				<div class="relative mt-12">
+					<div class="absolute inset-0 bg-gradient-to-r from-pink-500/20 to-purple-500/20 blur-3xl rounded-full" />
+					<div class="relative bg-gradient-to-br from-pink-500/10 to-black border border-pink-500/20 rounded-2xl p-8 backdrop-blur-sm">
+						<UIcon name="i-lucide-video" class="w-24 h-24 mx-auto text-pink-500 mb-4" />
+						<h3 class="text-2xl font-bold text-white mb-2">PiP Magic</h3>
+						<p class="text-gray-400">Natural language shape generation</p>
+					</div>
+				</div>
+			</template>
+		</UPageHero>
 
-		<div class="features-section">
-			<h2>Features</h2>
-			<div class="features-grid">
-				<div class="feature">
-					<span class="feature-icon">📁</span>
-					<h3>Import & Organize</h3>
-					<p>Drag and drop videos into your library</p>
-				</div>
-				<div class="feature">
-					<span class="feature-icon">✂️</span>
-					<h3>Timeline Editing</h3>
-					<p>Trim, split, and arrange your clips</p>
-				</div>
-				<div class="feature">
-					<span class="feature-icon">✨</span>
-					<h3>PiP Shapes</h3>
-					<p>AI-powered custom shapes for picture-in-picture</p>
-				</div>
-				<div class="feature">
-					<span class="feature-icon">🎥</span>
-					<h3>Screen Recording</h3>
-					<p>Record your screen with webcam overlay</p>
-				</div>
+		<UContainer class="py-16 md:py-24">
+			<div class="text-center mb-12 md:mb-16">
+				<h2 class="text-3xl md:text-4xl font-bold text-white mb-4">Features</h2>
+				<p class="text-gray-400 text-lg">Everything you need to create professional videos</p>
 			</div>
-		</div>
-	</UContainer>
+
+			<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 md:gap-8">
+				<UCard
+					v-for="feature in features"
+					:key="feature.title"
+					class="bg-zinc-900/50 border-zinc-800 hover:border-pink-500/50 transition-all hover:shadow-lg hover:shadow-pink-500/10"
+				>
+					<template #header>
+						<div class="flex items-center gap-4 mb-4">
+							<div class="p-3 bg-pink-500/10 rounded-lg border border-pink-500/20">
+								<UIcon :name="feature.icon" class="w-6 h-6 text-pink-500" />
+							</div>
+							<h3 class="text-xl font-semibold text-white">{{ feature.title }}</h3>
+						</div>
+					</template>
+					<p class="text-gray-400">{{ feature.description }}</p>
+				</UCard>
+			</div>
+		</UContainer>
+	</div>
 </template>
 
 <script setup lang="ts">
 definePageMeta({
 	layout: 'home'
 })
+
+const heroLinks = [
+	{
+		label: 'My Projects',
+		to: '/projects',
+		size: 'xl' as const,
+		color: 'primary' as const,
+		variant: 'solid' as const
+	},
+	{
+		label: 'Import Media',
+		to: '/library',
+		size: 'xl' as const,
+		variant: 'outline' as const,
+		class: 'border-pink-500/50 text-white hover:bg-pink-500/10'
+	},
+	{
+		label: 'Login',
+		to: '/login',
+		size: 'xl' as const,
+		variant: 'ghost' as const,
+		class: 'text-gray-300 hover:text-pink-500'
+	}
+]
+
+const features = [
+	{
+		icon: 'i-lucide-folder-open',
+		title: 'Import & Organize',
+		description: 'Drag and drop videos into your library with ease'
+	},
+	{
+		icon: 'i-lucide-scissors',
+		title: 'Timeline Editing',
+		description: 'Trim, split, and arrange your clips on a professional timeline'
+	},
+	{
+		icon: 'i-lucide-sparkles',
+		title: 'PiP Shapes',
+		description: 'AI-powered custom shapes for picture-in-picture overlays'
+	},
+	{
+		icon: 'i-lucide-video',
+		title: 'Screen Recording',
+		description: 'Record your screen with webcam overlay in one seamless workflow'
+	}
+]
 </script>
 
 <style scoped>
 .home-page {
-	padding: 0;
-}
-
-.hero-section {
-	text-align: center;
-	padding: 6rem 2rem;
-	background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-}
-
-.hero-title {
-	font-size: 4rem;
-	font-weight: bold;
-	color: white;
-	margin-bottom: 1rem;
-}
-
-.hero-subtitle {
-	font-size: 1.5rem;
-	color: white;
-	opacity: 0.9;
-	margin-bottom: 3rem;
-}
-
-.cta-buttons {
-	display: flex;
-	gap: 1rem;
-	justify-content: center;
-}
-
-.features-section {
-	padding: 4rem 2rem;
-}
-
-.features-section h2 {
-	text-align: center;
-	font-size: 2rem;
-	margin-bottom: 3rem;
-}
-
-.features-grid {
-	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-	gap: 2rem;
-	max-width: 1200px;
-	margin: 0 auto;
-}
-
-.feature {
-	padding: 2rem;
-	background: white;
-	border-radius: 1rem;
-	text-align: center;
-}
-
-.feature-icon {
-	font-size: 3rem;
-	display: block;
-	margin-bottom: 1rem;
-}
-
-.feature h3 {
-	font-size: 1.25rem;
-	font-weight: 600;
-	margin-bottom: 0.5rem;
-}
-
-.feature p {
-	color: rgb(107 114 128);
+	min-height: calc(100vh - var(--ui-header-height, 64px));
 }
 </style>
 

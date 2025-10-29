@@ -1,6 +1,6 @@
 import { ref, computed } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
-import type { Clip } from '../../types/project'
+import type { Clip, ExportSettings } from '../../types/project'
 
 export interface VideoClip {
   path: string
@@ -14,13 +14,6 @@ export interface VideoClip {
     height: number
     shape: string
   }
-}
-
-export interface ExportSettings {
-  resolution: string
-  quality: string
-  format: string
-  preset: string
 }
 
 export interface ExportProgress {

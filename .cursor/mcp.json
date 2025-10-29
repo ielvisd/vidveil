@@ -1,0 +1,48 @@
+{
+  "mcpServers": {
+    "nuxt-mcp": {
+      "command": "npx",
+      "args": ["@modelcontextprotocol/server-nuxt"]
+    },
+    "vue-mcp": {
+      "command": "npx", 
+      "args": ["vite-plugin-vue-mcp"]
+    },
+    "context7": {
+      "command": "npx",
+      "args": ["@modelcontextprotocol/server-context7"],
+      "env": {
+        "CONTEXT7_API_KEY": "${env:CONTEXT7_API_KEY}"
+      }
+    },
+    "playwright-mcp": {
+      "command": "npx",
+      "args": ["@modelcontextprotocol/server-playwright"],
+      "cwd": "${workspaceFolder}/clipforge"
+    },
+    "supabase-mcp": {
+      "command": "npx",
+      "args": ["@modelcontextprotocol/server-supabase"],
+      "env": {
+        "SUPABASE_URL": "${env:PUBLIC_SUPABASE_URL}",
+        "SUPABASE_KEY": "${env:PUBLIC_SUPABASE_KEY}"
+      }
+    },
+    "chrome-devtools-mcp": {
+      "command": "npx",
+      "args": ["@modelcontextprotocol/server-chrome-devtools"]
+    },
+    "vercel-mcp": {
+      "command": "npx",
+      "args": ["@modelcontextprotocol/server-vercel"],
+      "env": {
+        "VERCEL_TOKEN": "${env:VERCEL_TOKEN}"
+      }
+    },
+    "nuxt-ui": {
+      "type": "http",
+      "url": "https://ui.nuxt.com/mcp",
+      "description": "Nuxt UI MCP server for component documentation and examples"
+    }
+  }
+}

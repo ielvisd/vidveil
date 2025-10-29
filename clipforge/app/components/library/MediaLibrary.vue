@@ -1,41 +1,36 @@
 <template>
 	<div class="media-library">
-		<div
-			class="drop-zone"
-			:class="{ 'dragging': dragging }"
-			@drop="handleDrop"
-			@dragover="handleDragOver"
-			@dragleave="handleDragLeave"
-		>
-			<div v-if="mediaFiles.length === 0" class="empty-state">
-				<UIcon name="i-heroicons-photo" class="text-6xl text-gray-400 mb-4" />
-				<p class="text-gray-500 mb-2">Drag and drop video files here</p>
-				<p class="text-sm text-gray-400">or</p>
-				<UButton @click="openFilePicker" variant="outline" class="mt-4">
-					Browse Files
-				</UButton>
-			</div>
-
-			<div v-else class="media-grid">
-				<LibraryMediaThumbnail
-					v-for="file in mediaFiles"
-					:key="file.id"
-					:file="file"
-					:selected="selectedMedia?.id === file.id"
-					@select="selectMedia(file.id)"
-					@remove="removeMedia(file.id)"
-				/>
-			</div>
-		</div>
-
-		<input
-			ref="fileInput"
-			type="file"
-			multiple
+		<!-- File upload drop zone - always visible for drag and drop -->
+		<UFileUpload
+			v-model="uploadedFiles"
 			accept="video/*"
-			@change="handleFileSelect"
-			class="hidden"
+			multiple
+			icon="i-heroicons-photo"
+			:label="mediaFiles.length === 0 ? 'Drag and drop video files here' : 'Drop more files to add'"
+			:description="mediaFiles.length === 0 ? 'or click to browse' : undefined"
+			variant="area"
+			:interactive="true"
+			:file-delete="false"
+			class="w-full drop-zone"
+			:class="{ 'has-files': mediaFiles.length > 0 }"
+			@update:model-value="handleFilesChanged"
 		>
+			<template #files>
+				<!-- Empty slot to hide default file display -->
+			</template>
+		</UFileUpload>
+
+		<!-- Custom media grid when files exist -->
+		<div v-if="mediaFiles.length > 0" class="media-grid">
+			<LibraryMediaThumbnail
+				v-for="file in mediaFiles"
+				:key="file.id"
+				:file="file"
+				:selected="selectedMedia?.id === file.id"
+				@select="selectMedia(file.id)"
+				@remove="removeMedia(file.id)"
+			/>
+		</div>
 	</div>
 </template>
 
@@ -43,39 +38,41 @@
 const {
 	mediaFiles,
 	selectedMedia,
-	dragging,
-	handleDrop: handleDropImport,
-	handleDragOver: handleDragOverImport,
-	handleDragLeave: handleDragLeaveImport,
 	selectMedia: selectMediaImport,
 	removeMedia: removeMediaImport,
 	importFiles
 } = useMedia()
 
-const fileInput = ref<HTMLInputElement | null>(null)
+const uploadedFiles = ref<File[]>([])
 
-const handleDrop = handleDropImport
-const handleDragOver = handleDragOverImport
-const handleDragLeave = handleDragLeaveImport
 const selectMedia = selectMediaImport
 const removeMedia = removeMediaImport
 
-const openFilePicker = () => {
-	fileInput.value?.click()
-}
+const handleFilesChanged = async (files: File | File[] | null | undefined) => {
+	if (!files) {
+		uploadedFiles.value = []
+		return
+	}
 
-const handleFileSelect = async (event: Event) => {
-	const target = event.target as HTMLInputElement
-	const files = Array.from(target.files || [])
+	const fileArray = Array.isArray(files) ? files : [files]
 	
-	if (files.length > 0) {
-		await importFiles(files)
+	// Filter out already processed files by checking name and size
+	const existingFiles = new Set(
+		mediaFiles.value.map(f => `${f.name}-${f.size}`)
+	)
+	
+	const newFiles = fileArray.filter(file => {
+		const fileKey = `${file.name}-${file.size}`
+		return !existingFiles.has(fileKey)
+	})
+
+	if (newFiles.length > 0) {
+		await importFiles(newFiles)
 	}
 	
-	// Reset input
-	if (target) {
-		target.value = ''
-	}
+	// Clear uploadedFiles so FileUpload doesn't display files
+	// We show them in our custom MediaThumbnail grid instead
+	uploadedFiles.value = []
 }
 </script>
 
@@ -86,31 +83,23 @@ const handleFileSelect = async (event: Event) => {
 }
 
 .drop-zone {
-	border: 2px dashed;
-	border-color: rgb(209 213 219);
-	border-radius: 0.5rem;
-	padding: 2rem;
-	transition: colors;
-	min-height: 400px;
+	transition: all 0.2s;
 }
 
-.drop-zone.dragging {
-	border-color: rgb(59 130 246);
-	background-color: rgb(239 246 255);
+.drop-zone.has-files {
+	margin-bottom: 1rem;
 }
 
-.empty-state {
-	display: flex;
-	flex-direction: column;
-	align-items: center;
-	justify-content: center;
-	height: 100%;
+/* When files exist, make the drop zone more compact */
+:deep(.has-files .ui-file-upload__base) {
+	min-height: 120px;
 }
 
 .media-grid {
 	display: grid;
 	grid-template-columns: repeat(2, 1fr);
 	gap: 1rem;
+	width: 100%;
 }
 
 @media (min-width: 768px) {
