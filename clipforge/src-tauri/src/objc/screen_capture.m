@@ -545,3 +545,42 @@ bool is_recording_objc() {
     return (g_session != nil && g_output != nil && [g_session isRunning]);
 }
 
+// Check screen recording permission status
+// Returns 1 if granted, 0 if not granted
+int check_screen_recording_permission_objc(uint32_t display_id) {
+    @autoreleasepool {
+        NSLog(@"🔍 Checking screen recording permission for display %u...", display_id);
+        
+        // For macOS 10.15+, we need to check permission
+        if (@available(macOS 10.15, *)) {
+            // Check if we already have permission by trying to create a display stream
+            // This will fail if permission is not granted, but won't show a dialog
+            CGDisplayStreamRef stream = CGDisplayStreamCreate(
+                display_id, 
+                1, 1, 
+                kCVPixelFormatType_32BGRA, 
+                nil, 
+                ^(CGDisplayStreamFrameStatus status __attribute__((unused)), 
+                  uint64_t displayTime __attribute__((unused)), 
+                  IOSurfaceRef frameSurface __attribute__((unused)), 
+                  CGDisplayStreamUpdateRef updateRef __attribute__((unused))) {
+                    // This callback will only be called if we have permission
+                }
+            );
+            
+            if (stream == NULL) {
+                NSLog(@"❌ No screen recording permission - CGDisplayStreamCreate failed");
+                return 0; // Permission not granted
+            } else {
+                NSLog(@"✅ Screen recording permission confirmed");
+                CFRelease(stream);
+                return 1; // Permission granted
+            }
+        } else {
+            // macOS version < 10.15, no permission required
+            NSLog(@"📺 macOS version < 10.15, no permission required");
+            return 1; // Always granted on older macOS
+        }
+    }
+}
+

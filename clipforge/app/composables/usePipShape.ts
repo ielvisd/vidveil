@@ -21,9 +21,18 @@ export const usePipShape = () => {
 	const webcamClipId = ref<string | null>(null)
 	const isActive = computed(() => pipConfig.value !== null)
 
-	const applyShape = async (shape: PredefinedShape, clipId?: string, videoElement?: HTMLVideoElement) => {
+	const applyShape = async (
+		shape: PredefinedShape, 
+		clipId?: string, 
+		videoElement?: HTMLVideoElement,
+		containerDimensions?: { width: number; height: number }
+	) => {
+		// Preserve webcamClipId if clipId is not provided (for shape switching)
 		if (clipId) {
 			webcamClipId.value = clipId
+		} else if (!webcamClipId.value && globalPipConfig.value) {
+			// Keep existing clipId when switching shapes without providing new one
+			clipId = webcamClipId.value || undefined
 		}
 
 		// Determine PiP size - use recommended size if video element available
@@ -36,9 +45,13 @@ export const usePipShape = () => {
 			pipHeight = recommendedSize.height
 		}
 
+		// Get container dimensions - use provided or fallback to window/viewport
+		const containerWidth = containerDimensions?.width || (typeof window !== 'undefined' ? window.innerWidth : 1920)
+		const containerHeight = containerDimensions?.height || (typeof window !== 'undefined' ? window.innerHeight : 1080)
+
 		// Auto-position PiP using smart positioning
-		let x = window.innerWidth - pipWidth - 50 // Default bottom-right
-		let y = window.innerHeight - pipHeight - 50
+		let x = containerWidth - pipWidth - 50 // Default bottom-right
+		let y = containerHeight - pipHeight - 50
 
 		if (videoElement && videoElement.readyState >= 2) {
 			try {
@@ -48,12 +61,23 @@ export const usePipShape = () => {
 					{ width: pipWidth, height: pipHeight },
 					{ lightweight: true, timeout: 500 }
 				)
-				x = suggestedPosition.x
-				y = suggestedPosition.y
-				console.log('✅ Smart PiP positioning applied:', { x, y })
+				
+				// Scale coordinates from video dimensions to container display dimensions
+				const videoWidth = videoElement.videoWidth || 1920
+				const videoHeight = videoElement.videoHeight || 1080
+				
+				// Scale the position from video space to container space
+				x = (suggestedPosition.x / videoWidth) * containerWidth
+				y = (suggestedPosition.y / videoHeight) * containerHeight
+				
+				// Ensure PiP stays within container bounds
+				x = Math.max(0, Math.min(x, containerWidth - pipWidth))
+				y = Math.max(0, Math.min(y, containerHeight - pipHeight))
+				
+				console.log('✅ Smart PiP positioning applied (scaled):', { x, y, videoSpace: suggestedPosition, container: { containerWidth, containerHeight } })
 			} catch (error) {
 				console.warn('⚠️ Smart positioning failed, using default position:', error)
-				// Fallback to bottom-right corner
+				// Fallback to bottom-right corner (already set above)
 			}
 		}
 
@@ -68,7 +92,7 @@ export const usePipShape = () => {
 			shadow: true
 		}
 
-		console.log('Applied PiP shape:', shape, 'to webcam clip:', clipId, 'at position:', { x, y })
+		console.log('Applied PiP shape:', shape, 'to webcam clip:', clipId || webcamClipId.value, 'at position:', { x, y })
 	}
 
 	const setWebcamClip = (clipId: string) => {

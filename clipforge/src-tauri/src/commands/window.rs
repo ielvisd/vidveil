@@ -9,6 +9,22 @@ pub fn force_resize(window: Window) {
     }
 }
 
+#[command]
+pub fn minimize_window(window: Window) -> Result<(), String> {
+    window.minimize().map_err(|e| e.to_string())
+}
+
+#[command]
+pub fn show_window(window: Window) -> Result<(), String> {
+    window.show().map_err(|e| e.to_string())
+}
+
+#[command]
+pub fn unminimize_window(window: Window) -> Result<(), String> {
+    window.unminimize().map_err(|e| e.to_string())
+}
+
+
 
 
 

@@ -1,203 +1,273 @@
 <template>
-	<UModal v-model="isOpen" :ui="{ width: 'sm:max-w-2xl', height: 'max-h-[90vh]' }">
-		<UCard :ui="{ body: { base: 'max-h-[60vh] overflow-y-auto' } }">
-			<template #header>
-				<div class="flex items-center justify-between">
-					<h3 class="text-lg font-semibold">Export Video</h3>
-					<UButton 
-						icon="i-heroicons-x-mark" 
-						color="gray" 
-						variant="ghost" 
-						@click="close"
-					/>
+	<UModal 
+		v-model:open="isOpen" 
+		:ui="{ content: 'sm:max-w-3xl max-h-[90vh]' }"
+	>
+		<template #header>
+			<div class="flex items-center justify-between w-full">
+				<div class="flex items-center gap-3">
+					<UIcon name="i-heroicons-arrow-down-tray" class="size-6 text-primary" />
+					<h3 class="text-xl font-semibold">Export Video</h3>
 				</div>
-			</template>
+				<UButton 
+					icon="i-heroicons-x-mark" 
+					color="gray" 
+					variant="ghost" 
+					size="sm"
+					@click="close"
+				/>
+			</div>
+		</template>
 
-			<div class="space-y-4">
+		<template #body>
+			<div class="space-y-6 max-h-[60vh] overflow-y-auto px-1">
 				<!-- Native Export Status -->
-				<div class="success-box">
-					<i class="i-heroicons-check-circle" />
-					<div>
-						<div class="font-semibold">Native Video Export Ready</div>
-						<div class="text-sm mt-1">ClipForge uses native macOS AVFoundation for video export - no additional software required!</div>
-					</div>
-				</div>
+				<UAlert
+					color="success"
+					variant="soft"
+					icon="i-heroicons-check-circle"
+					title="Native Export Ready"
+					description="ClipForge uses native macOS AVFoundation for lightning-fast video export - no additional software required!"
+					class="mb-6"
+				/>
 
-				<!-- Preset Selection -->
-				<div class="option-group">
-					<label class="option-label">Export Preset</label>
+				<!-- Export Preset Selection -->
+				<UFormField label="Export Preset" description="Choose a preset optimized for your use case" required>
 					<USelectMenu
 						v-model="selectedPreset"
-						:options="presetOptions"
-						option-attribute="name"
-						value-attribute="id"
-						placeholder="Choose a preset..."
-						@change="onPresetChange"
+						:items="presetMenuItems"
+						value-key="id"
+						label-key="name"
+						placeholder="Select a preset..."
+						size="lg"
+						@update:model-value="onPresetChange"
 					>
-						<template #label>
-							<div v-if="selectedPreset" class="flex items-center justify-between w-full">
-								<span>{{ getPresetById(selectedPreset)?.name }}</span>
-								<span class="text-xs text-gray-400">{{ getPresetById(selectedPreset)?.estimatedSize }}</span>
-							</div>
-						</template>
-						<template #option="{ option }">
+						<template #item-label="{ item }">
 							<div class="flex items-center justify-between w-full">
-								<div>
-									<div class="font-medium">{{ option.name }}</div>
-									<div class="text-xs text-gray-400">{{ option.description }}</div>
+								<div class="flex-1">
+									<div class="font-medium">{{ item.name }}</div>
+									<div class="text-xs text-muted mt-0.5">{{ item.description }}</div>
 								</div>
-								<div class="text-xs text-gray-400">{{ option.estimatedSize }}</div>
+								<UBadge :color="getPresetBadgeColor(item)" variant="soft" class="ml-2">
+									{{ item.estimatedSize }}
+								</UBadge>
 							</div>
 						</template>
 					</USelectMenu>
-				</div>
+				</UFormField>
 
 				<!-- File Name -->
-				<div class="option-group">
-					<label class="option-label">File Name</label>
-					<input 
+				<UFormField label="File Name" description="Choose a name for your exported video" required>
+					<UInput
 						v-model="fileName"
-						type="text"
-						class="option-input"
 						placeholder="my-video.mp4"
-					/>
-				</div>
-
-				<!-- Advanced Options (Collapsible) -->
-				<div class="option-group">
-					<UButton 
-						variant="ghost" 
-						size="sm"
-						@click="showAdvanced = !showAdvanced"
-						:icon="showAdvanced ? 'i-heroicons-chevron-up' : 'i-heroicons-chevron-down'"
+						size="lg"
+						icon="i-heroicons-document-text"
+						@update:model-value="updateFileExtension"
 					>
-						Advanced Options
-					</UButton>
-				</div>
+						<template #trailing>
+							<UBadge v-if="selectedPreset" color="neutral" variant="soft" class="mr-1">
+								{{ getPresetFormat(selectedPreset) }}
+							</UBadge>
+						</template>
+					</UInput>
+				</UFormField>
 
-				<div v-if="showAdvanced" class="space-y-4 pl-4 border-l-2 border-gray-700">
-					<div class="option-group">
-						<label class="option-label">Resolution</label>
-						<USelectMenu
-							v-model="resolution"
-							:options="resolutionOptions"
-							option-attribute="label"
-							value-attribute="value"
-						/>
+				<!-- Estimated File Size -->
+				<div v-if="estimatedSize" class="bg-elevated/50 rounded-lg p-4 border border-default">
+					<div class="flex items-center justify-between">
+						<div class="flex items-center gap-2">
+							<UIcon name="i-heroicons-circle-stack" class="size-5 text-info" />
+							<span class="text-sm font-medium">Estimated File Size</span>
+						</div>
+						<UBadge :color="getSizeBadgeColor(estimatedSize)" variant="soft" size="lg">
+							{{ estimatedSize }}
+						</UBadge>
 					</div>
-
-					<div class="option-group">
-						<label class="option-label">Quality</label>
-						<USelectMenu
-							v-model="quality"
-							:options="qualityOptions"
-							option-attribute="label"
-							value-attribute="value"
-						/>
+					<div v-if="totalDuration" class="mt-2 text-xs text-muted">
+						Based on {{ formatDuration(totalDuration) }} of video content
 					</div>
-
-					<div class="option-group">
-						<label class="option-label">Format</label>
-						<USelectMenu
-							v-model="format"
-							:options="formatOptions"
-							option-attribute="label"
-							value-attribute="value"
-						/>
-					</div>
-
-					<div class="option-group">
-						<label class="option-label">Encoding Preset</label>
-						<USelectMenu
-							v-model="preset"
-							:options="ffmpegPresetOptions"
-							option-attribute="label"
-							value-attribute="value"
-						/>
-					</div>
-				</div>
-
-				<!-- File Size Estimate -->
-				<div v-if="estimatedSize" class="info-box">
-					<i class="i-heroicons-information-circle" />
-					<span>Estimated file size: {{ estimatedSize }}</span>
 				</div>
 
 				<!-- PiP Info -->
-				<div v-if="webcamClip" class="info-box">
-					<i class="i-heroicons-information-circle" />
-					<span>PiP overlay will be composited into final video</span>
-				</div>
+				<UAlert
+					v-if="webcamClip && !isExporting"
+					color="info"
+					variant="soft"
+					icon="i-heroicons-information-circle"
+					title="Picture-in-Picture"
+					description="Your webcam overlay will be automatically composited into the final video"
+				/>
+
+				<!-- Advanced Options (Collapsible) -->
+				<UCollapsible v-model:open="showAdvanced" class="flex flex-col gap-2">
+					<UButton
+						variant="ghost"
+						size="lg"
+						:trailing-icon="showAdvanced ? 'i-heroicons-chevron-up' : 'i-heroicons-chevron-down'"
+						class="w-full justify-between group"
+						:ui="{ trailingIcon: 'group-data-[state=open]:rotate-180 transition-transform duration-200' }"
+					>
+						<div class="flex items-center gap-2">
+							<UIcon name="i-heroicons-cog-6-tooth" class="size-5" />
+							<span class="font-medium">Advanced Options</span>
+						</div>
+					</UButton>
+					
+					<template #content>
+						<div class="pt-4 space-y-4 border-t border-default">
+							<div class="grid grid-cols-2 gap-4">
+								<UFormField label="Resolution">
+									<USelectMenu
+										v-model="resolution"
+										:items="resolutionOptions"
+										value-key="value"
+										label-key="label"
+									/>
+								</UFormField>
+
+								<UFormField label="Quality">
+									<USelectMenu
+										v-model="quality"
+										:items="qualityOptions"
+										value-key="value"
+										label-key="label"
+									/>
+								</UFormField>
+
+								<UFormField label="Format">
+									<USelectMenu
+										v-model="format"
+										:items="formatOptions"
+										value-key="value"
+										label-key="label"
+									/>
+								</UFormField>
+
+								<UFormField label="Encoding Speed">
+									<USelectMenu
+										v-model="preset"
+										:items="ffmpegPresetOptions"
+										value-key="value"
+										label-key="label"
+									/>
+								</UFormField>
+							</div>
+						</div>
+					</template>
+				</UCollapsible>
 
 				<!-- Export Progress -->
-				<div v-else class="export-progress">
-					<div class="progress-header">
-						<div class="progress-info">
-							<span class="progress-label">{{ currentStep }}</span>
-							<span class="progress-value">{{ exportProgress }}%</span>
+				<div v-if="isExporting" class="space-y-4 bg-elevated/50 rounded-lg p-5 border border-default">
+					<div class="flex items-center justify-between">
+						<div class="flex items-center gap-2">
+							<UIcon name="i-heroicons-arrow-path" class="size-5 text-primary animate-spin" />
+							<span class="font-medium">{{ currentStep }}</span>
 						</div>
-						<div v-if="totalSteps > 0" class="progress-steps">
-							Step {{ Math.ceil((exportProgress / 100) * totalSteps) }} of {{ totalSteps }}
-						</div>
+						<UBadge color="primary" variant="soft">
+							{{ exportProgress }}%
+						</UBadge>
 					</div>
-					
-					<div class="progress-bar">
-						<div 
-							class="progress-fill"
-							:style="{ width: `${exportProgress}%` }"
-						/>
+
+					<UProgress 
+						:model-value="exportProgress" 
+						:max="100"
+						:status="true"
+						color="primary"
+						size="lg"
+					/>
+
+					<div v-if="totalSteps > 0" class="text-xs text-muted text-center">
+						Step {{ Math.ceil((exportProgress / 100) * totalSteps) }} of {{ totalSteps }}
 					</div>
-					
-					<div class="progress-details">
-						<div class="progress-time">
-							<i class="i-heroicons-clock" />
+
+					<div class="flex items-center justify-between text-xs text-muted mt-2">
+						<div class="flex items-center gap-1">
+							<UIcon name="i-heroicons-clock" class="size-4" />
 							<span>{{ getFormattedTime }}</span>
 						</div>
-						<div class="progress-speed">
-							<i class="i-heroicons-bolt" />
+						<div class="flex items-center gap-1">
+							<UIcon name="i-heroicons-bolt" class="size-4" />
 							<span>{{ getProcessingSpeed }}</span>
 						</div>
 					</div>
-					
-					<p class="progress-note">This may take a few minutes depending on video length</p>
+
+					<p class="text-xs text-muted text-center mt-2">
+						This may take a few minutes depending on video length
+					</p>
 				</div>
+
+				<!-- Success Message -->
+				<UAlert
+					v-if="exportSuccess && exportedFilePath"
+					color="success"
+					variant="soft"
+					icon="i-heroicons-check-circle"
+					title="Export Complete!"
+					:description="`File saved to: ${exportedFilePath}`"
+				>
+					<template #actions>
+						<UButton 
+							size="sm"
+							variant="outline"
+							icon="i-heroicons-folder-open"
+							@click="revealInFinder"
+						>
+							Reveal in Finder
+						</UButton>
+					</template>
+				</UAlert>
 
 				<!-- Error -->
-				<div v-if="error" class="error-box">
-					<i class="i-heroicons-exclamation-triangle" />
-					<span>{{ error }}</span>
-				</div>
+				<UAlert
+					v-if="error"
+					color="error"
+					variant="soft"
+					icon="i-heroicons-exclamation-triangle"
+					title="Export Failed"
+					:description="error"
+				/>
 			</div>
+		</template>
 
-			<template #footer>
-				<div class="flex justify-end gap-3">
-					<UButton 
-						v-if="!isExporting"
-						variant="outline"
-						@click="close"
-					>
-						Cancel
-					</UButton>
-					<UButton 
-						v-if="isExporting"
-						variant="outline"
-						color="red"
-						@click="cancelExport"
-					>
-						Cancel Export
-					</UButton>
-					<UButton 
-						v-if="!isExporting"
-						color="primary"
-						@click="startExport"
-						:disabled="!fileName || !selectedPreset"
-						:loading="isExporting"
-					>
-						Export Video
-					</UButton>
-				</div>
-			</template>
-		</UCard>
+		<template #footer>
+			<div class="flex justify-end gap-3">
+				<UButton 
+					v-if="!isExporting"
+					variant="ghost"
+					@click="close"
+				>
+					Cancel
+				</UButton>
+				<UButton 
+					v-if="isExporting"
+					variant="outline"
+					color="error"
+					@click="cancelExport"
+				>
+					Cancel Export
+				</UButton>
+				<UButton 
+					v-if="!isExporting && !exportSuccess"
+					color="primary"
+					size="lg"
+					:disabled="!fileName || !selectedPreset"
+					:loading="isExporting"
+					icon="i-heroicons-arrow-down-tray"
+					@click="startExport"
+				>
+					Export Video
+				</UButton>
+				<UButton 
+					v-if="exportSuccess"
+					color="primary"
+					size="lg"
+					@click="close"
+				>
+					Close
+				</UButton>
+			</div>
+		</template>
 	</UModal>
 </template>
 
@@ -222,33 +292,18 @@ const {
 	totalSteps,
 	exportVideo, 
 	cancelExport,
-	getProgressDetails,
 	getFormattedTime,
 	getProcessingSpeed,
-	isNativeExportAvailable,
-	checkNativeExportAvailability,
-	getNativeExportStatus
 } = useNativeVideoExport()
 
 const isOpen = ref(true)
 const fileName = ref(`${props.projectName || 'video'}.mp4`)
-const selectedPreset = ref('youtube')
+const selectedPreset = ref<string>('youtube')
 const showAdvanced = ref(false)
+const exportSuccess = ref(false)
+const exportedFilePath = ref<string | null>(null)
 
-// Debug logging
-console.log('📤 ExportDialog mounted with:', {
-	clips: props.clips.length,
-	projectName: props.projectName,
-	fileName: fileName.value,
-	selectedPreset: selectedPreset.value
-})
-
-// Check native export availability on mount
-onMounted(async () => {
-	await checkNativeExportAvailability()
-})
-
-// Advanced options (can be overridden)
+// Advanced options
 const resolution = ref('1080p')
 const quality = ref('high')
 const format = ref('mp4')
@@ -258,13 +313,54 @@ const webcamClip = computed(() =>
 	props.clips.find(c => c.metadata?.type === 'webcam')
 )
 
-// Preset options for dropdown
-const presetOptions = computed(() => exportPresets.map(preset => ({
+// Calculate total duration
+const totalDuration = computed(() => {
+	return props.clips.reduce((sum, clip) => sum + clip.duration, 0)
+})
+
+// Format duration for display
+const formatDuration = (seconds: number): string => {
+	const mins = Math.floor(seconds / 60)
+	const secs = Math.floor(seconds % 60)
+	if (mins > 0) {
+		return `${mins}m ${secs}s`
+	}
+	return `${secs}s`
+}
+
+// Preset menu items for SelectMenu
+const presetMenuItems = computed(() => exportPresets.map(preset => ({
 	id: preset.id,
 	name: preset.name,
 	description: preset.description,
-	estimatedSize: preset.estimatedSize
+	estimatedSize: preset.estimatedSize,
+	format: preset.format,
+	useCase: preset.useCase
 })))
+
+// Get preset badge color based on quality
+const getPresetBadgeColor = (item: any): 'primary' | 'success' | 'info' | 'warning' => {
+	const preset = getPresetById(item.id)
+	if (!preset) return 'info'
+	
+	if (preset.quality === 'high') return 'success'
+	if (preset.quality === 'medium') return 'primary'
+	return 'info'
+}
+
+// Get size badge color
+const getSizeBadgeColor = (size: string): 'primary' | 'success' | 'info' | 'warning' => {
+	const sizeMB = parseFloat(size.replace(/[^\d.]/g, ''))
+	if (sizeMB > 100) return 'warning'
+	if (sizeMB > 50) return 'info'
+	return 'success'
+}
+
+// Get preset format
+const getPresetFormat = (presetId: string): string => {
+	const preset = getPresetById(presetId)
+	return preset?.format.toUpperCase() || 'MP4'
+}
 
 // Advanced options
 const resolutionOptions = [
@@ -304,10 +400,7 @@ const estimatedSize = computed(() => {
 	const preset = getPresetById(selectedPreset.value)
 	if (!preset) return null
 	
-	// Calculate total duration of clips
-	const totalDuration = props.clips.reduce((sum, clip) => sum + clip.duration, 0)
-	
-	return calculateEstimatedSize(totalDuration, preset)
+	return calculateEstimatedSize(totalDuration.value, preset)
 })
 
 // Handle preset change
@@ -317,13 +410,26 @@ const onPresetChange = (presetId: string) => {
 		resolution.value = preset.resolution
 		quality.value = preset.quality
 		format.value = preset.format
-		preset.value = preset.preset
 		
 		// Update file extension
-		if (fileName.value) {
-			const baseName = fileName.value.replace(/\.[^/.]+$/, '')
-			fileName.value = `${baseName}.${preset.format}`
-		}
+		updateFileExtension()
+	}
+}
+
+// Update file extension based on selected preset
+const updateFileExtension = () => {
+	if (!fileName.value || !selectedPreset.value) return
+	
+	const preset = getPresetById(selectedPreset.value)
+	if (!preset) return
+	
+	const baseName = fileName.value.replace(/\.[^/.]+$/, '')
+	const ext = preset.format === 'mp3' ? 'mp3' : 
+	            preset.format === 'webm' ? 'webm' : 
+	            preset.format === 'gif' ? 'gif' : 'mp4'
+	
+	if (!fileName.value.endsWith(`.${ext}`)) {
+		fileName.value = `${baseName}.${ext}`
 	}
 }
 
@@ -337,6 +443,10 @@ const startExport = async () => {
 		preset: preset.value
 	})
 	
+	// Reset success state
+	exportSuccess.value = false
+	exportedFilePath.value = null
+	
 	const result = await exportVideo(
 		props.clips,
 		fileName.value,
@@ -349,12 +459,32 @@ const startExport = async () => {
 	)
 
 	if (result.success) {
-		console.log('✅ Export completed successfully')
-		setTimeout(() => {
-			close()
-		}, 1000)
+		console.log('✅ Export completed successfully:', result.outputPath)
+		exportSuccess.value = true
+		exportedFilePath.value = result.outputPath || null
 	} else {
 		console.error('❌ Export failed:', result.error)
+		exportSuccess.value = false
+	}
+}
+
+const revealInFinder = async () => {
+	if (!exportedFilePath.value) return
+	
+	try {
+		const { invoke } = await import('@tauri-apps/api/core')
+		await invoke('reveal_file_in_finder', { filePath: exportedFilePath.value })
+	} catch (err) {
+		console.error('Failed to reveal file in Finder:', err)
+		// Fallback: try using shell to open the directory
+		try {
+			const { shell } = await import('@tauri-apps/plugin-shell')
+			const pathParts = exportedFilePath.value.split('/')
+			const directory = pathParts.slice(0, -1).join('/')
+			await shell.open(directory)
+		} catch (shellErr) {
+			console.error('Failed to open file directory:', shellErr)
+		}
 	}
 }
 
@@ -365,121 +495,19 @@ const close = () => {
 </script>
 
 <style scoped>
-.option-group {
-	margin-bottom: 1rem;
+/* Additional animations if needed */
+@keyframes fade-in {
+	from {
+		opacity: 0;
+		transform: translateY(-4px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
 }
 
-.option-label {
-	display: block;
-	font-size: 0.875rem;
-	font-weight: 500;
-	color: rgb(156 163 175);
-	margin-bottom: 0.5rem;
-}
-
-.option-input {
-	width: 100%;
-	padding: 0.5rem;
-	background-color: rgb(55 65 81);
-	border: 1px solid rgb(75 85 99);
-	border-radius: 0.375rem;
-	color: white;
-	font-size: 0.875rem;
-}
-
-.option-input:focus {
-	outline: none;
-	border-color: rgb(59 130 246);
-}
-
-.info-box {
-	display: flex;
-	align-items: center;
-	gap: 0.5rem;
-	padding: 0.75rem;
-	background-color: rgba(59, 130, 246, 0.1);
-	border: 1px solid rgba(59, 130, 246, 0.3);
-	border-radius: 0.375rem;
-	color: rgb(147, 197, 253);
-	font-size: 0.875rem;
-}
-
-.export-progress {
-	padding: 1rem 0;
-}
-
-.progress-header {
-	margin-bottom: 1rem;
-}
-
-.progress-info {
-	display: flex;
-	justify-content: space-between;
-	margin-bottom: 0.5rem;
-}
-
-.progress-label {
-	font-size: 0.875rem;
-	color: rgb(156 163 175);
-}
-
-.progress-value {
-	font-size: 0.875rem;
-	font-weight: 600;
-	color: rgb(59 130 246);
-}
-
-.progress-steps {
-	font-size: 0.75rem;
-	color: rgb(107 114 128);
-	text-align: right;
-}
-
-.progress-bar {
-	width: 100%;
-	height: 8px;
-	background-color: rgb(55 65 81);
-	border-radius: 9999px;
-	overflow: hidden;
-	margin-bottom: 0.75rem;
-}
-
-.progress-fill {
-	height: 100%;
-	background: linear-gradient(to right, rgb(59 130 246), rgb(147 51 234));
-	transition: width 0.3s ease;
-}
-
-.progress-details {
-	display: flex;
-	justify-content: space-between;
-	margin-bottom: 0.5rem;
-}
-
-.progress-time,
-.progress-speed {
-	display: flex;
-	align-items: center;
-	gap: 0.25rem;
-	font-size: 0.75rem;
-	color: rgb(107 114 128);
-}
-
-.progress-note {
-	font-size: 0.75rem;
-	color: rgb(107 114 128);
-	text-align: center;
-}
-
-.error-box {
-	display: flex;
-	align-items: center;
-	gap: 0.5rem;
-	padding: 0.75rem;
-	background-color: rgba(220, 38, 38, 0.1);
-	border: 1px solid rgba(220, 38, 38, 0.3);
-	border-radius: 0.375rem;
-	color: rgb(248, 113, 113);
-	font-size: 0.875rem;
+.fade-in {
+	animation: fade-in 0.2s ease-out;
 }
 </style>

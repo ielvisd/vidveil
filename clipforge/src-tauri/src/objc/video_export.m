@@ -13,6 +13,76 @@ typedef struct {
 
 // Global export session reference
 static AVAssetExportSession* g_export_session = nil;
+static AVAssetWriter* g_asset_writer = nil;
+
+// Helper function to convert quality string to video bitrate (bits per second)
+NSInteger get_video_bitrate(const char* quality) {
+    NSString* qualityStr = [NSString stringWithUTF8String:quality];
+    if ([qualityStr isEqualToString:@"high"]) {
+        return 8000000; // 8 Mbps
+    } else if ([qualityStr isEqualToString:@"medium"]) {
+        return 4000000; // 4 Mbps
+    } else if ([qualityStr isEqualToString:@"low"]) {
+        return 2000000; // 2 Mbps
+    }
+    return 4000000; // Default to medium
+}
+
+// Helper function to convert quality string to audio bitrate (bits per second)
+NSInteger get_audio_bitrate(const char* quality) {
+    NSString* qualityStr = [NSString stringWithUTF8String:quality];
+    if ([qualityStr isEqualToString:@"high"]) {
+        return 192000; // 192 kbps
+    } else if ([qualityStr isEqualToString:@"medium"]) {
+        return 128000; // 128 kbps
+    } else if ([qualityStr isEqualToString:@"low"]) {
+        return 96000; // 96 kbps
+    }
+    return 128000; // Default to medium
+}
+
+// Helper function to convert resolution string to CGSize
+// Returns CGSizeZero for "source" to indicate preserve original resolution
+CGSize get_resolution_size(const char* resolution) {
+    NSString* resStr = [NSString stringWithUTF8String:resolution];
+    if ([resStr isEqualToString:@"1080p"]) {
+        return CGSizeMake(1920, 1080);
+    } else if ([resStr isEqualToString:@"720p"]) {
+        return CGSizeMake(1280, 720);
+    } else if ([resStr isEqualToString:@"480p"]) {
+        return CGSizeMake(854, 480);
+    } else if ([resStr isEqualToString:@"360p"]) {
+        return CGSizeMake(640, 360);
+    } else if ([resStr isEqualToString:@"source"]) {
+        return CGSizeZero; // Indicates preserve source resolution
+    }
+    // Default to 1080p
+    return CGSizeMake(1920, 1080);
+}
+
+// Helper function to get export preset based on quality
+NSString* get_export_preset(const char* quality, const char* preset) {
+    NSString* qualityStr = [NSString stringWithUTF8String:quality];
+    
+    // Map quality to export presets
+    // Target bitrates: high=8Mbps, medium=4Mbps, low=2Mbps
+    // AVAssetExportPresetHighestQuality uses roughly 20-30 Mbps (too high for our target)
+    // AVAssetExportPresetMediumQuality uses roughly 10-15 Mbps (closest to our "high" target)
+    // AVAssetExportPresetLowQuality uses roughly 5-8 Mbps (closest to our "medium" target)
+    // AVAssetExportPreset640x480 uses lower bitrate (suitable for "low")
+    
+    if ([qualityStr isEqualToString:@"high"]) {
+        // Use MediumQuality preset - closer to our 8 Mbps target than HighestQuality
+        return AVAssetExportPresetMediumQuality;
+    } else if ([qualityStr isEqualToString:@"medium"]) {
+        // Use LowQuality preset - closer to our 4 Mbps target than MediumQuality
+        return AVAssetExportPresetLowQuality;
+    } else if ([qualityStr isEqualToString:@"low"]) {
+        // Use LowQuality for low as well, or consider 640x480 if available
+        return AVAssetExportPresetLowQuality;
+    }
+    return AVAssetExportPresetMediumQuality;
+}
 
 // Helper function to create composition from clips
 AVMutableComposition* create_composition_from_clips(
@@ -120,7 +190,8 @@ AVMutableVideoComposition* create_pip_composition(
     float pip_x_percent,
     float pip_y_percent,
     float pip_size_percent,
-    const char* pip_shape_svg
+    const char* pip_shape_svg,
+    CGSize targetResolution
 ) {
     @autoreleasepool {
         // Get video tracks
@@ -144,10 +215,25 @@ AVMutableVideoComposition* create_pip_composition(
         CGSize screenSize = screenVideoTrack.naturalSize;
         NSLog(@"📺 Screen size: %.0fx%.0f", screenSize.width, screenSize.height);
         
+        // Use target resolution if specified, otherwise use source size
+        CGSize renderSize;
+        if (CGSizeEqualToSize(targetResolution, CGSizeZero)) {
+            renderSize = screenSize; // Preserve source resolution
+        } else if (targetResolution.width > 0 && targetResolution.height > 0) {
+            renderSize = targetResolution;
+        } else {
+            renderSize = screenSize; // Fallback to source
+        }
+        NSLog(@"📐 Target render size: %.0fx%.0f", renderSize.width, renderSize.height);
+        
+        // Calculate scale factor if resolution is different
+        CGFloat scaleX = renderSize.width / screenSize.width;
+        CGFloat scaleY = renderSize.height / screenSize.height;
+        
         // Create video composition
         AVMutableVideoComposition* videoComposition = [AVMutableVideoComposition videoComposition];
         videoComposition.frameDuration = CMTimeMake(1, 30); // 30 fps
-        videoComposition.renderSize = screenSize;
+        videoComposition.renderSize = renderSize;
         
         // Create instruction
         AVMutableVideoCompositionInstruction* instruction = [AVMutableVideoCompositionInstruction videoCompositionInstruction];
@@ -155,9 +241,16 @@ AVMutableVideoComposition* create_pip_composition(
         
         NSMutableArray* layerInstructions = [NSMutableArray array];
         
-        // Screen layer (background)
+        // Screen layer (background) - apply scale if resolution changed
         AVMutableVideoCompositionLayerInstruction* screenLayerInstruction = 
             [AVMutableVideoCompositionLayerInstruction videoCompositionLayerInstructionWithAssetTrack:screenTrack];
+        
+        // Scale screen track to target resolution if needed
+        if (scaleX != 1.0 || scaleY != 1.0) {
+            CGAffineTransform screenTransform = CGAffineTransformMakeScale(scaleX, scaleY);
+            [screenLayerInstruction setTransform:screenTransform atTime:kCMTimeZero];
+        }
+        
         [layerInstructions addObject:screenLayerInstruction];
         
         // Webcam layer (PiP) if available
@@ -165,17 +258,23 @@ AVMutableVideoComposition* create_pip_composition(
             AVMutableVideoCompositionLayerInstruction* webcamLayerInstruction = 
                 [AVMutableVideoCompositionLayerInstruction videoCompositionLayerInstructionWithAssetTrack:webcamTrack];
             
-            // Calculate PiP dimensions and position
-            float pipWidth = screenSize.width * pip_size_percent;
-            float pipHeight = screenSize.height * pip_size_percent;
-            float pipX = screenSize.width * pip_x_percent;
-            float pipY = screenSize.height * pip_y_percent;
+            // Calculate PiP dimensions and position in render size coordinates
+            float pipWidth = renderSize.width * pip_size_percent;
+            float pipHeight = renderSize.height * pip_size_percent;
+            float pipX = renderSize.width * pip_x_percent;
+            float pipY = renderSize.height * pip_y_percent;
             
-            // Create transform for PiP positioning
-            CGAffineTransform pipTransform = CGAffineTransformMakeScale(pip_size_percent, pip_size_percent);
-            pipTransform = CGAffineTransformTranslate(pipTransform, 
-                (pipX / pip_size_percent) - (screenSize.width * pip_x_percent), 
-                (pipY / pip_size_percent) - (screenSize.height * pip_y_percent));
+            // Get webcam track size for scaling
+            AVAssetTrack* webcamVideoTrack = [[webcamTrack.asset tracksWithMediaType:AVMediaTypeVideo] firstObject];
+            CGSize webcamSize = webcamVideoTrack ? webcamVideoTrack.naturalSize : renderSize;
+            
+            // Calculate scale to fit PiP size
+            CGFloat pipScaleX = pipWidth / webcamSize.width;
+            CGFloat pipScaleY = pipHeight / webcamSize.height;
+            
+            // Create transform for PiP positioning and scaling
+            CGAffineTransform pipTransform = CGAffineTransformMakeScale(pipScaleX, pipScaleY);
+            pipTransform = CGAffineTransformTranslate(pipTransform, pipX / pipScaleX, pipY / pipScaleY);
             
             [webcamLayerInstruction setTransform:pipTransform atTime:kCMTimeZero];
             
@@ -217,15 +316,24 @@ ExportResult export_video_native_objc(
     memset(result.current_step, 0, sizeof(result.current_step));
     memset(result.error_message, 0, sizeof(result.error_message));
     
-    // Suppress unused parameter warning - resolution is kept for API consistency
-    (void)resolution;
-    
     @autoreleasepool {
         @try {
             NSLog(@"🚀 Starting native video export");
             NSLog(@"📺 Screen video: %s", screen_video_path);
             NSLog(@"📷 Webcam video: %s", webcam_video_path ? webcam_video_path : "none");
             NSLog(@"📁 Output: %s", output_path);
+            NSLog(@"⚙️ Quality: %s, Resolution: %s", quality, resolution);
+            
+            // Get target resolution and bitrate settings
+            CGSize targetResolution = get_resolution_size(resolution);
+            NSInteger videoBitrate = get_video_bitrate(quality);
+            NSInteger audioBitrate = get_audio_bitrate(quality);
+            NSString* exportPreset = get_export_preset(quality, NULL);
+            
+            NSLog(@"📐 Target resolution: %.0fx%.0f", targetResolution.width, targetResolution.height);
+            NSLog(@"📊 Video bitrate: %ld bps (%.2f Mbps)", (long)videoBitrate, videoBitrate / 1000000.0);
+            NSLog(@"🔊 Audio bitrate: %ld bps (%.2f kbps)", (long)audioBitrate, audioBitrate / 1000.0);
+            NSLog(@"🎯 Export preset: %@", exportPreset);
             
             strcpy(result.current_step, "Creating composition...");
             
@@ -246,19 +354,64 @@ ExportResult export_video_native_objc(
             
             strcpy(result.current_step, "Creating video composition...");
             
-            // Create video composition with PiP
-            AVMutableVideoComposition* videoComposition = nil;
+            // Get source video size to determine if we need a video composition
+            NSArray<AVMutableCompositionTrack*>* videoTracks = [composition tracksWithMediaType:AVMediaTypeVideo];
+            CGSize sourceSize = CGSizeZero;
+            if (videoTracks.count > 0) {
+                AVAssetTrack* sourceTrack = [[videoTracks[0].asset tracksWithMediaType:AVMediaTypeVideo] firstObject];
+                if (sourceTrack) {
+                    sourceSize = sourceTrack.naturalSize;
+                }
+            }
+            
+            // Determine if we need to scale resolution or have PiP
+            BOOL needsVideoComposition = NO;
             if (webcam_video_path != NULL && strlen(webcam_video_path) > 0) {
-                videoComposition = create_pip_composition(
-                    composition,
-                    pip_x_percent,
-                    pip_y_percent,
-                    pip_size_percent,
-                    pip_shape_svg
-                );
+                needsVideoComposition = YES; // PiP requires video composition
+            } else if (targetResolution.width > 0 && targetResolution.height > 0 && 
+                      (targetResolution.width != sourceSize.width || targetResolution.height != sourceSize.height)) {
+                needsVideoComposition = YES; // Resolution scaling requires video composition
+            } else if (CGSizeEqualToSize(targetResolution, CGSizeZero)) {
+                // Source resolution - don't create video composition unless PiP is needed
+                needsVideoComposition = NO;
+            }
+            
+            // Create video composition with PiP and/or resolution scaling
+            AVMutableVideoComposition* videoComposition = nil;
+            if (needsVideoComposition) {
+                if (webcam_video_path != NULL && strlen(webcam_video_path) > 0) {
+                    videoComposition = create_pip_composition(
+                        composition,
+                        pip_x_percent,
+                        pip_y_percent,
+                        pip_size_percent,
+                        pip_shape_svg,
+                        targetResolution
+                    );
+                } else {
+                    // Just scaling, no PiP
+                    videoComposition = [AVMutableVideoComposition videoComposition];
+                    videoComposition.frameDuration = CMTimeMake(1, 30);
+                    videoComposition.renderSize = targetResolution;
+                    
+                    AVMutableVideoCompositionInstruction* instruction = 
+                        [AVMutableVideoCompositionInstruction videoCompositionInstruction];
+                    instruction.timeRange = CMTimeRangeMake(kCMTimeZero, composition.duration);
+                    
+                    CGFloat scaleX = targetResolution.width / sourceSize.width;
+                    CGFloat scaleY = targetResolution.height / sourceSize.height;
+                    
+                    AVMutableVideoCompositionLayerInstruction* layerInstruction = 
+                        [AVMutableVideoCompositionLayerInstruction videoCompositionLayerInstructionWithAssetTrack:videoTracks[0]];
+                    CGAffineTransform transform = CGAffineTransformMakeScale(scaleX, scaleY);
+                    [layerInstruction setTransform:transform atTime:kCMTimeZero];
+                    
+                    instruction.layerInstructions = @[layerInstruction];
+                    videoComposition.instructions = @[instruction];
+                }
                 
                 if (videoComposition == nil) {
-                    strcpy(result.error_message, "Failed to create PiP video composition");
+                    strcpy(result.error_message, "Failed to create video composition");
                     return result;
                 }
             }
@@ -269,9 +422,9 @@ ExportResult export_video_native_objc(
             NSLog(@"📊 Composition duration: %f seconds", CMTimeGetSeconds(composition.duration));
             NSLog(@"📊 Composition tracks: %lu", (unsigned long)composition.tracks.count);
             
-            // Create export session with a more compatible preset
+            // Create export session with compression preset (not Passthrough)
             AVAssetExportSession* exportSession = [AVAssetExportSession exportSessionWithAsset:composition 
-                                                                                      presetName:AVAssetExportPresetPassthrough];
+                                                                                      presetName:exportPreset];
             
             if (exportSession == nil) {
                 strcpy(result.error_message, "Failed to create export session");

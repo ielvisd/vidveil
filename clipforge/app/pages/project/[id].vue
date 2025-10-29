@@ -101,14 +101,41 @@
 							:key="clip.id"
 							@click="selectClip(clip)"
 							class="clip-item"
-							:class="{ active: selectedClip?.id === clip.id }"
+							:class="{ 
+								active: selectedClip?.id === clip.id,
+								uploading: getUploadState(clip.id) === 'uploading',
+								failed: getUploadState(clip.id) === 'failed'
+							}"
 						>
 							<div class="clip-thumbnail">
-								<i class="i-heroicons-film text-2xl" />
+								<!-- Loading spinner for uploading clips -->
+								<div v-if="getUploadState(clip.id) === 'uploading'" class="upload-spinner">
+									<SharedLoadingSpinner size="sm" />
+								</div>
+								<!-- Error indicator for failed uploads -->
+								<div v-else-if="getUploadState(clip.id) === 'failed'" class="upload-error">
+									<i class="i-heroicons-exclamation-triangle text-xl text-error" />
+								</div>
+								<!-- Normal icon for completed/ready clips -->
+								<i v-else class="i-heroicons-film text-2xl" />
+								
+								<!-- Storage type indicator badge -->
+								<div class="storage-badge-overlay" v-if="getUploadState(clip.id) !== 'uploading'">
+									<span 
+										class="storage-badge-mini" 
+										:class="clip.metadata?.storageType === 'local' ? 'storage-local' : 'storage-cloud'"
+									>
+										{{ clip.metadata?.storageType === 'local' ? '📦' : '☁️' }}
+									</span>
+								</div>
 							</div>
 							<div class="clip-info">
 								<p class="clip-name">{{ clip.name }}</p>
-								<p class="clip-duration">{{ formatDuration(clip.duration) }}</p>
+								<p class="clip-duration">
+									{{ formatDuration(clip.duration) }}
+									<span v-if="getUploadState(clip.id) === 'uploading'" class="upload-status"> (uploading...)</span>
+									<span v-else-if="getUploadState(clip.id) === 'failed'" class="error-status"> (failed)</span>
+								</p>
 							</div>
 						</div>
 					</div>
@@ -155,15 +182,19 @@
 						<h3>PiP Shapes</h3>
 					</template>
 					<div class="shape-grid">
-						<button
+						<UButton
 							v-for="shape in shapes"
 							:key="shape"
 							@click="applyShape(shape)"
-							class="shape-btn"
+							variant="outline"
+							size="sm"
+							color="neutral"
+							block
 							:title="`Apply ${shape} shape`"
+							:class="pipConfig?.shape === shape ? 'shape-active' : ''"
 						>
 							{{ shape }}
-						</button>
+						</UButton>
 					</div>
 				</UCard>
 			</div>
@@ -251,13 +282,14 @@
 								variant="ghost"
 								title="Mute (M)"
 							/>
-							<input 
-								type="range" 
+							<USlider 
 								v-model="volume"
-								@input="updateVolume"
-								min="0" 
-								max="100" 
+								@update:model-value="updateVolume"
+								:min="0"
+								:max="100"
+								size="sm"
 								class="volume-slider"
+								style="width: 100px;"
 							/>
 						</div>
 						<UButton 
@@ -347,7 +379,7 @@
 							/>
 						</div>
 
-						<!-- Track -->
+						<!-- Track 1: Video Track -->
 						<div class="track">
 							<div class="track-header">
 								<span>Video Track</span>
@@ -357,21 +389,26 @@
 								@click="handleTimelineClick"
 								ref="trackContainer"
 							>
-								<!-- Playhead Indicator -->
-								<TimelinePlayheadIndicator :playhead-position="playheadPixels" />
+								<!-- Playhead Indicator (shared across tracks) -->
+								<TimelinePlayheadIndicator 
+									:playhead-position="playheadPixels" 
+									@update:position="handlePlayheadDrag"
+								/>
 
-								<!-- Clips -->
-								<template v-for="(clip, index) in sortedClips" :key="clip.id">
+								<!-- Track 1 Clips -->
+								<template v-for="(clip, index) in track1Clips" :key="clip.id">
 									<div 
 										class="timeline-clip"
 										:class="{ 
 											selected: selectedClip?.id === clip.id, 
 											dragging: draggingClipId === clip.id,
 											'drop-target': dropTargetIndex === index,
-											trimming: trimmingClipId === clip.id
+											trimming: trimmingClipId === clip.id,
+											uploading: getUploadState(clip.id) === 'uploading',
+											failed: getUploadState(clip.id) === 'failed'
 										}"
 										:style="getClipStyle(clip, index)"
-										:draggable="!trimmingClipId"
+										:draggable="!trimmingClipId && getUploadState(clip.id) !== 'uploading'"
 										style="display: block !important; visibility: visible !important; opacity: 1 !important;"
 										@dragstart="handleDragStart($event, clip, index)"
 										@dragend="handleDragEnd"
@@ -388,8 +425,23 @@
 										/>
 										
 										<div class="clip-content-wrapper">
-											<span class="clip-label">{{ clip.name }}</span>
-											<span class="clip-duration-badge">{{ formatDuration(clip.duration) }}</span>
+											<span class="clip-label">
+												{{ clip.name }}
+												<span v-if="getUploadState(clip.id) === 'uploading'" class="upload-indicator">⏳</span>
+												<span v-else-if="getUploadState(clip.id) === 'failed'" class="error-indicator">⚠️</span>
+											</span>
+											<div class="clip-metadata-row">
+												<span class="clip-duration-badge">{{ formatDuration(clip.duration) }}</span>
+												<!-- Storage indicator badge -->
+												<span 
+													v-if="getUploadState(clip.id) !== 'uploading' && clip.metadata?.storageType"
+													class="storage-badge-timeline"
+													:class="clip.metadata?.storageType === 'local' ? 'storage-local' : 'storage-cloud'"
+													:title="clip.metadata?.storageType === 'local' ? 'Stored locally (file too large)' : 'Synced to cloud'"
+												>
+													{{ clip.metadata?.storageType === 'local' ? '📦' : '☁️' }}
+												</span>
+											</div>
 										</div>
 										
 										<!-- Right trim handle -->
@@ -401,7 +453,82 @@
 										/>
 									</div>
 								</template>
-								
+							</div>
+						</div>
+
+						<!-- Track 2: Overlay Track -->
+						<div class="track">
+							<div class="track-header">
+								<span>Overlay Track</span>
+							</div>
+							<div 
+								class="track-content"
+								@click="handleTimelineClick"
+							>
+								<!-- Playhead Indicator (shared across tracks) -->
+								<TimelinePlayheadIndicator 
+									:playhead-position="playheadPixels" 
+									@update:position="handlePlayheadDrag"
+								/>
+
+								<!-- Track 2 Clips -->
+								<template v-for="(clip, index) in track2Clips" :key="clip.id">
+									<div 
+										class="timeline-clip"
+										:class="{ 
+											selected: selectedClip?.id === clip.id, 
+											dragging: draggingClipId === clip.id,
+											'drop-target': dropTargetIndex === index,
+											trimming: trimmingClipId === clip.id,
+											uploading: getUploadState(clip.id) === 'uploading',
+											failed: getUploadState(clip.id) === 'failed'
+										}"
+										:style="getClipStyle(clip, index)"
+										:draggable="!trimmingClipId && getUploadState(clip.id) !== 'uploading'"
+										style="display: block !important; visibility: visible !important; opacity: 1 !important;"
+										@dragstart="handleDragStart($event, clip, index)"
+										@dragend="handleDragEnd"
+										@dragover.prevent="handleDragOver($event, index)"
+										@drop="handleDrop($event, index)"
+										@click.stop="selectClip(clip)"
+									>
+										<!-- Left trim handle -->
+										<div 
+											class="trim-handle trim-handle-left"
+											:class="{ active: trimmingClipId === clip.id && trimmingHandle === 'start' }"
+											@mousedown.stop="handleTrimStart($event, clip, index)"
+											title="Trim start (drag to adjust)"
+										/>
+										
+										<div class="clip-content-wrapper">
+											<span class="clip-label">
+												{{ clip.name }}
+												<span v-if="getUploadState(clip.id) === 'uploading'" class="upload-indicator">⏳</span>
+												<span v-else-if="getUploadState(clip.id) === 'failed'" class="error-indicator">⚠️</span>
+											</span>
+											<div class="clip-metadata-row">
+												<span class="clip-duration-badge">{{ formatDuration(clip.duration) }}</span>
+												<!-- Storage indicator badge -->
+												<span 
+													v-if="getUploadState(clip.id) !== 'uploading' && clip.metadata?.storageType"
+													class="storage-badge-timeline"
+													:class="clip.metadata?.storageType === 'local' ? 'storage-local' : 'storage-cloud'"
+													:title="clip.metadata?.storageType === 'local' ? 'Stored locally (file too large)' : 'Synced to cloud'"
+												>
+													{{ clip.metadata?.storageType === 'local' ? '📦' : '☁️' }}
+												</span>
+											</div>
+										</div>
+										
+										<!-- Right trim handle -->
+										<div 
+											class="trim-handle trim-handle-right"
+											:class="{ active: trimmingClipId === clip.id && trimmingHandle === 'end' }"
+											@mousedown.stop="handleTrimEnd($event, clip, index)"
+											title="Trim end (drag to adjust)"
+										/>
+									</div>
+								</template>
 							</div>
 						</div>
 					</div>
@@ -429,7 +556,8 @@ const routeParamId = 'id' in route.params ? route.params.id : ''
 const projectId = (typeof routeParamId === 'string' ? routeParamId : Array.isArray(routeParamId) ? routeParamId[0] : '') as string
 
 const { currentProject, selectProject } = useProject()
-const { clips, addClip, fetchClips, loading: clipsLoading, reorderClips, updateClip } = useClips()
+const { clips, addClip, fetchClips, loading: clipsLoading, reorderClips, updateClip, getUploadState, uploadStates } = useClips()
+const toast = useToast()
 const { isExporting, exportProgress, exportVideo } = useExport()
 const { currentTime, duration, isPlaying, togglePlay, seek, formatTime, setPlayheadPosition, initializePlayer } = usePlayer()
 const { zoomLevel, zoomIn, zoomOut, setZoom } = useTimeline()
@@ -481,13 +609,16 @@ const canSplitClip = computed(() => {
 
 // Find clip that contains the given time
 const findClipAtTime = (time: number) => {
-	let cumulativeTime = 0
-	for (const clip of sortedClips.value) {
-		const clipDuration = clip.duration || 0
-		if (time >= cumulativeTime && time <= cumulativeTime + clipDuration) {
+	// Check both tracks for clips at this time
+	for (const clip of [...track1Clips.value, ...track2Clips.value]) {
+		const clipStart = clip.start_time !== undefined && clip.start_time !== null
+			? clip.start_time
+			: 0
+		const clipEnd = clipStart + (clip.duration || 0)
+		
+		if (time >= clipStart && time <= clipEnd) {
 			return clip
 		}
-		cumulativeTime += clipDuration
 	}
 	return null
 }
@@ -515,6 +646,21 @@ const sortedClips = computed(() => {
 	
 	// Return stable references to prevent unnecessary re-renders
 	return sorted
+})
+
+// Separate clips by track
+const track1Clips = computed(() => {
+	return sortedClips.value.filter(clip => {
+		const track = clip.track || (clip.metadata?.type === 'webcam' ? 2 : 1)
+		return track === 1
+	})
+})
+
+const track2Clips = computed(() => {
+	return sortedClips.value.filter(clip => {
+		const track = clip.track || (clip.metadata?.type === 'webcam' ? 2 : 1)
+		return track === 2
+	})
 })
 
 // Total duration of all clips
@@ -548,10 +694,14 @@ const selectClip = (clip: any) => {
 		// If no PiP shape yet, apply default circle with smart positioning
 		if (!pipConfig.value) {
 			nextTick(async () => {
+				const containerDims = {
+					width: containerWidth.value || (typeof window !== 'undefined' ? window.innerWidth : 1920),
+					height: containerHeight.value || (typeof window !== 'undefined' ? window.innerHeight : 1080)
+				}
 				if (videoPlayer.value && videoPlayer.value.readyState >= 2) {
-					await applyPipShape('circle', clip.id, videoPlayer.value)
+					await applyPipShape('circle', clip.id, videoPlayer.value, containerDims)
 				} else {
-					await applyPipShape('circle', clip.id)
+					await applyPipShape('circle', clip.id, undefined, containerDims)
 				}
 			})
 		}
@@ -838,10 +988,14 @@ onMounted(async () => {
 				setWebcamClip(webcam.id)
 				// Wait for video element to be ready before applying smart positioning
 				nextTick(async () => {
+					const containerDims = {
+						width: containerWidth.value || (typeof window !== 'undefined' ? window.innerWidth : 1920),
+						height: containerHeight.value || (typeof window !== 'undefined' ? window.innerHeight : 1080)
+					}
 					if (videoPlayer.value && videoPlayer.value.readyState >= 2) {
-						await applyPipShape('circle', webcam.id, videoPlayer.value)
+						await applyPipShape('circle', webcam.id, videoPlayer.value, containerDims)
 					} else {
-						applyPipShape('circle', webcam.id)
+						await applyPipShape('circle', webcam.id, undefined, containerDims)
 					}
 				})
 				console.log('📷 Webcam PiP setup:', webcam.name)
@@ -857,6 +1011,64 @@ onMounted(async () => {
 	} else {
 		loading.value = false
 	}
+
+	// Watch for upload state changes and show toast notifications
+	const previousUploadStates = ref(new Map<string, 'uploading' | 'completed' | 'failed'>())
+	
+	// Initialize previous states on mount
+	clips.value.forEach(clip => {
+		const state = getUploadState(clip.id)
+		if (state) {
+			previousUploadStates.value.set(clip.id, state)
+		}
+	})
+	
+	// Watch upload states map directly
+	watch(uploadStates, (currentStates, previousStates) => {
+		if (!previousStates) {
+			// Initialize previous states on first watch
+			currentStates.forEach((state, clipId) => {
+				previousUploadStates.value.set(clipId, state)
+			})
+			return
+		}
+
+		// Check for state transitions
+		currentStates.forEach((currentState, clipId) => {
+			const previousState = previousUploadStates.value.get(clipId)
+			const clip = clips.value.find(c => c.id === clipId)
+
+			if (!clip) return
+
+			// Show toast when upload completes or fails
+			if (previousState === 'uploading' && currentState === 'completed') {
+				const storageType = clip.metadata?.storageType || 'cloud'
+				toast.add({
+					title: 'Upload complete',
+					description: `${clip.name} has been ${storageType === 'cloud' ? 'synced to cloud' : 'saved locally (file too large)'}`,
+					icon: storageType === 'cloud' ? 'i-heroicons-cloud-arrow-up' : 'i-heroicons-archive-box',
+					color: 'success'
+				})
+			} else if (previousState === 'uploading' && currentState === 'failed') {
+				toast.add({
+					title: 'Upload failed',
+					description: `Failed to upload ${clip.name}. File saved locally as fallback.`,
+					icon: 'i-heroicons-exclamation-triangle',
+					color: 'warning'
+				})
+			}
+
+			// Update previous state
+			previousUploadStates.value.set(clipId, currentState)
+		})
+
+		// Clean up states for clips that no longer exist
+		previousUploadStates.value.forEach((_, clipId) => {
+			if (!currentStates.has(clipId) && !clips.value.find(c => c.id === clipId)) {
+				previousUploadStates.value.delete(clipId)
+			}
+		})
+	}, { deep: true, immediate: false })
 })
 
 // Debounce function for performance
@@ -894,18 +1106,44 @@ const formatDuration = (seconds: number | undefined): string => {
 }
 
 // Memoize clip positions to avoid recalculating on every render
+// Calculate positions per track separately
 const clipPositions = computed(() => {
 	const positions = new Map<string, { left: number; width: number }>()
-	let cumulativeTime = 0
 	
-	sortedClips.value.forEach((clip, index) => {
+	// Process Track 1 clips
+	let cumulativeTime1 = 0
+	track1Clips.value.forEach((clip) => {
 		const duration = clip.duration || 10
 		const widthPixels = Math.max(duration * pixelsPerSecond.value, 80)
+		
+		const startTime = clip.start_time !== undefined && clip.start_time !== null 
+			? clip.start_time 
+			: cumulativeTime1
+		
 		positions.set(clip.id, {
-			left: cumulativeTime * pixelsPerSecond.value,
+			left: startTime * pixelsPerSecond.value,
 			width: widthPixels
 		})
-		cumulativeTime += duration
+		
+		if (clip.start_time === undefined || clip.start_time === null) {
+			cumulativeTime1 += duration
+		}
+	})
+	
+	// Process Track 2 clips (overlays can overlap at start_time 0)
+	track2Clips.value.forEach((clip) => {
+		const duration = clip.duration || 10
+		const widthPixels = Math.max(duration * pixelsPerSecond.value, 80)
+		
+		// Track 2 clips default to start_time 0 if not specified (for PiP overlays)
+		const startTime = clip.start_time !== undefined && clip.start_time !== null 
+			? clip.start_time 
+			: 0
+		
+		positions.set(clip.id, {
+			left: startTime * pixelsPerSecond.value,
+			width: widthPixels
+		})
 	})
 	
 	return positions
@@ -913,11 +1151,17 @@ const clipPositions = computed(() => {
 
 const getClipStyle = (clip: any, index: number) => {
 	const position = clipPositions.value.get(clip.id)
+	const track = clip.track || (clip.metadata?.type === 'webcam' ? 2 : 1)
+	const trackYOffset = track === 2 ? 100 : 20 // Track 1 at top (20px), Track 2 below (100px)
+	
 	if (!position) {
 		// Fallback calculation if not in cache
 		let startTime = 0
-		for (let i = 0; i < index; i++) {
-			const prevClip = sortedClips.value[i]
+		const clipsOnTrack = track === 1 ? track1Clips.value : track2Clips.value
+		const trackIndex = clipsOnTrack.findIndex(c => c.id === clip.id)
+		
+		for (let i = 0; i < trackIndex; i++) {
+			const prevClip = clipsOnTrack[i]
 			if (prevClip) {
 				startTime += prevClip.duration || 0
 			}
@@ -925,16 +1169,24 @@ const getClipStyle = (clip: any, index: number) => {
 		const duration = clip.duration || 10
 		const widthPixels = Math.max(duration * pixelsPerSecond.value, 80)
 		return {
-			transform: `translateX(${startTime * pixelsPerSecond.value}px)`,
+			transform: `translate(${startTime * pixelsPerSecond.value}px, ${trackYOffset}px)`,
 			width: `${widthPixels}px`,
 		}
 	}
 	
 	// Use CSS transform for better performance (GPU accelerated)
 	return {
-		transform: `translateX(${position.left}px)`,
+		transform: `translate(${position.left}px, ${trackYOffset}px)`,
 		width: `${position.width}px`,
 	}
+}
+
+const handlePlayheadDrag = (position: number) => {
+	if (!trackContainer.value || !duration.value) return
+	
+	// Calculate time from pixel position
+	const time = position / pixelsPerSecond.value
+	seek(Math.max(0, Math.min(time, duration.value)))
 }
 
 const handleTimelineClick = (event: MouseEvent) => {
@@ -962,23 +1214,42 @@ const handleDragOver = (event: DragEvent, index: number) => {
 
 const handleDrop = async (event: DragEvent, targetIndex: number) => {
 	event.preventDefault()
-	if (dragSourceIndex.value === null || dragSourceIndex.value === targetIndex) return
+	if (!dragSourceIndex.value || !trackContainer.value) return
 	
-	// Reorder clips array
-	const newOrder = [...sortedClips.value]
-	const [movedClip] = newOrder.splice(dragSourceIndex.value, 1)
-	if (movedClip) {
-		newOrder.splice(targetIndex, 0, movedClip)
-	}
+	const draggedClip = clips.value.find(c => c.id === draggingClipId.value)
+	if (!draggedClip) return
 	
-	// Update order metadata in database
-	await reorderClips(newOrder)
+	// Calculate drop position from mouse X coordinate
+	const rect = trackContainer.value.getBoundingClientRect()
+	const dropX = event.clientX - rect.left
+	const dropTime = Math.max(0, dropX / pixelsPerSecond.value)
 	
-	// Recalculate start times with snapping
-	await updateClipTimeline(newOrder)
+	// Determine which track was dropped on based on Y position
+	const dropY = event.clientY - rect.top
+	const droppedOnTrack = dropY > 100 ? 2 : 1 // Track 2 starts around 100px down
+	
+	// Apply snap-to-grid (1 second intervals)
+	const { snapToGrid } = useTimeline()
+	const snappedTime = snapToGrid(dropTime, 1)
+	
+	// Update clip position and track
+	await updateClip(draggedClip.id, {
+		start_time: snappedTime,
+		track: droppedOnTrack,
+		metadata: {
+			...draggedClip.metadata,
+			order: targetIndex
+		}
+	})
+	
+	// Refresh clips to reflect changes
+	await fetchClips(projectId)
 	
 	// Add to undo history
 	addState([...clips.value], 'reorder')
+	
+	// Reset drag state
+	handleDragEnd()
 }
 
 const handleDragEnd = () => {
@@ -1111,19 +1382,19 @@ const startRecording = () => {
 
 const applyShape = async (shape: string) => {
 	const videoEl = videoPlayer.value
-	if (selectedClip.value) {
-		if (videoEl && videoEl.readyState >= 2) {
-			await applyPipShape(shape as any, selectedClip.value.id, videoEl)
-		} else {
-			await applyPipShape(shape as any, selectedClip.value.id)
-		}
+	// Prioritize webcam clip ID - this ensures shape switching works even when webcam clip isn't selected
+	const clipIdToUse = webcamClip.value?.id ?? webcamClipId.value ?? 
+		(selectedClip.value?.metadata?.type === 'webcam' ? selectedClip.value.id : undefined)
+	
+	const containerDims = {
+		width: containerWidth.value || (typeof window !== 'undefined' ? window.innerWidth : 1920),
+		height: containerHeight.value || (typeof window !== 'undefined' ? window.innerHeight : 1080)
+	}
+	
+	if (videoEl && videoEl.readyState >= 2) {
+		await applyPipShape(shape as any, clipIdToUse, videoEl, containerDims)
 	} else {
-		// Apply to active video if no clip selected
-		if (videoEl && videoEl.readyState >= 2) {
-			await applyPipShape(shape as any, undefined, videoEl)
-		} else {
-			await applyPipShape(shape as any)
-		}
+		await applyPipShape(shape as any, clipIdToUse, undefined, containerDims)
 	}
 }
 
@@ -1213,21 +1484,37 @@ watch(clips, (newClips, oldClips) => {
 const splitClipAtPlayhead = async () => {
 	if (!selectedClip.value || !canSplitClip.value) return
 	
-	// Calculate the split time relative to the clip's start in the timeline
-	const clipIndex = sortedClips.value.findIndex((c: any) => c.id === selectedClip.value.id)
+	const clip = selectedClip.value
+	const clipTrack = clip.track || (clip.metadata?.type === 'webcam' ? 2 : 1)
+	const clipsOnTrack = clipTrack === 1 ? track1Clips.value : track2Clips.value
+	const clipIndex = clipsOnTrack.findIndex((c: any) => c.id === clip.id)
+	
 	if (clipIndex === -1) return
 	
-	// Calculate timeline position of this clip
-	let timelineStart = 0
-	for (let i = 0; i < clipIndex; i++) {
-		timelineStart += sortedClips.value[i].duration || 0
-	}
+	// Calculate timeline position of this clip (using start_time)
+	const timelineStart = clip.start_time !== undefined && clip.start_time !== null
+		? clip.start_time
+		: 0
 	
 	// Calculate split time relative to the clip's source
-	const splitTime = currentTime.value - timelineStart + (selectedClip.value.start_time || 0)
+	// The currentTime is the absolute timeline position
+	// We need to find where in the source clip this corresponds to
+	const clipSourceStart = clip.start_time || 0
+	const clipSourceEnd = clip.end_time || clip.duration || 0
+	
+	// Split time is the position within the clip's source timeline
+	// If playhead is at timeline position X, and clip starts at timeline position Y,
+	// then split time in source = (X - Y) + clip.start_time
+	const splitTimeInSource = currentTime.value - timelineStart + clipSourceStart
+	
+	// Validate split point is within clip bounds
+	if (splitTimeInSource <= clipSourceStart || splitTimeInSource >= clipSourceEnd) {
+		console.warn('Cannot split clip at this position - outside clip bounds')
+		return
+	}
 	
 	// Split the clip
-	const splitResult = splitClip(selectedClip.value, splitTime)
+	const splitResult = splitClip(clip, splitTimeInSource)
 	
 	if (splitResult.length === 1) {
 		// Split didn't happen (invalid split point)
@@ -1237,11 +1524,21 @@ const splitClipAtPlayhead = async () => {
 	
 	const [firstPart, secondPart] = splitResult
 	
+	// Calculate new timeline positions
+	// First part keeps original timeline position
+	const firstPartTimelineStart = timelineStart
+	
+	// Second part starts immediately after first part on timeline
+	const secondPartTimelineStart = firstPartTimelineStart + firstPart.duration
+	
 	// Update first part in place
 	await updateClip(firstPart.id, {
-		start_time: firstPart.start_time,
+		start_time: firstPartTimelineStart,
 		end_time: firstPart.end_time,
-		duration: firstPart.duration
+		duration: firstPart.duration,
+		metadata: {
+			...clip.metadata
+		}
 	})
 	
 	// Add second part as a new clip
@@ -1249,14 +1546,14 @@ const splitClipAtPlayhead = async () => {
 	const newClipData = {
 		id: secondPart.id,
 		project_id: projectId,
-		name: `${selectedClip.value.name} (Part 2)`,
+		name: `${clip.name} (Part 2)`,
 		src: secondPart.src,
 		duration: secondPart.duration,
-		start_time: secondPart.start_time,
+		start_time: secondPartTimelineStart,
 		end_time: secondPart.end_time,
-		track: selectedClip.value.track || 1,
+		track: clipTrack,
 		metadata: {
-			...selectedClip.value.metadata,
+			...clip.metadata,
 			order: clipIndex + 1
 		}
 	}
@@ -1275,16 +1572,6 @@ const splitClipAtPlayhead = async () => {
 	// Refresh clips to show the split
 	await fetchClips(projectId)
 	
-	// Update order metadata for subsequent clips
-	for (let i = clipIndex + 2; i < sortedClips.value.length; i++) {
-		await updateClip(sortedClips.value[i].id, {
-			metadata: {
-				...sortedClips.value[i].metadata,
-				order: i + 1
-			}
-		})
-	}
-	
 	// Add to undo history after split
 	addState([...clips.value], 'split')
 	
@@ -1300,7 +1587,7 @@ const splitClipAtPlayhead = async () => {
 .project-editor {
 	display: flex;
 	flex-direction: column;
-	height: 100vh;
+	height: 100%;
 	background-color: #000000;
 	color: white;
 }
@@ -1393,9 +1680,10 @@ const splitClipAtPlayhead = async () => {
 .editor-layout {
 	display: grid;
 	grid-template-columns: 300px 1fr;
-	grid-template-rows: 1fr auto;
-	height: calc(100vh - 60px);
+	grid-template-rows: minmax(0, 1fr) auto;
+	flex: 1;
 	overflow: hidden;
+	min-height: 0;
 }
 
 /* Left Sidebar */
@@ -1405,10 +1693,11 @@ const splitClipAtPlayhead = async () => {
 	background-color: rgb(10 10 10);
 	border-right: 1px solid rgb(63 63 70 / 0.5);
 	overflow-y: auto;
-	padding: 1rem;
+	padding: clamp(0.75rem, 1.5vh, 1rem);
 	display: flex;
 	flex-direction: column;
-	gap: 1rem;
+	gap: clamp(0.5rem, 1vh, 1rem);
+	min-height: 0;
 }
 
 .empty-state {
@@ -1524,6 +1813,68 @@ const splitClipAtPlayhead = async () => {
 	justify-content: center;
 	flex-shrink: 0;
 	border: 1px solid rgb(39 39 42);
+	position: relative;
+}
+
+.upload-spinner {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 100%;
+	height: 100%;
+}
+
+.upload-error {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 100%;
+	height: 100%;
+}
+
+.storage-badge-overlay {
+	position: absolute;
+	top: 2px;
+	right: 2px;
+}
+
+.storage-badge-mini {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 18px;
+	height: 18px;
+	font-size: 0.625rem;
+	border-radius: 50%;
+	background-color: rgba(0, 0, 0, 0.7);
+	backdrop-filter: blur(4px);
+}
+
+.storage-cloud {
+	background-color: rgba(59, 130, 246, 0.3);
+}
+
+.storage-local {
+	background-color: rgba(251, 191, 36, 0.3);
+}
+
+.clip-item.uploading {
+	opacity: 0.7;
+	border-style: dashed;
+}
+
+.clip-item.failed {
+	border-color: rgb(220 38 38 / 0.5);
+}
+
+.upload-status {
+	color: rgb(147, 197, 253);
+	font-size: 0.7rem;
+}
+
+.error-status {
+	color: rgb(239, 68, 68);
+	font-size: 0.7rem;
 }
 
 .clip-info {
@@ -1625,45 +1976,11 @@ const splitClipAtPlayhead = async () => {
 	gap: 0.5rem;
 }
 
-.shape-btn {
-	padding: 0.75rem;
-	background-color: rgb(55 65 81);
-	border: 1px solid rgb(75 85 99);
-	border-radius: 0.375rem;
-	color: white;
-	font-size: 0.75rem;
-	cursor: pointer;
-	transition: all 0.2s ease;
-	position: relative;
-	overflow: hidden;
-}
-
-.shape-btn::before {
-	content: '';
-	position: absolute;
-	top: 50%;
-	left: 50%;
-	width: 0;
-	height: 0;
-	border-radius: 50%;
-	background-color: rgba(255, 20, 147, 0.3);
-	transform: translate(-50%, -50%);
-	transition: width 0.3s, height 0.3s;
-}
-
-.shape-btn:hover::before {
-	width: 100px;
-	height: 100px;
-}
-
-.shape-btn:hover {
-	background-color: rgb(75 85 99);
-	border-color: rgb(107 114 128);
-	transform: scale(1.05);
-}
-
-.shape-btn:active {
-	transform: scale(0.95);
+/* Shape buttons use UButton - active state for selected shape */
+.shape-active {
+	background-color: rgba(59, 130, 246, 0.2) !important;
+	color: rgb(59, 130, 246) !important;
+	border-color: rgba(59, 130, 246, 0.5) !important;
 }
 
 /* Center Preview */
@@ -1673,6 +1990,7 @@ const splitClipAtPlayhead = async () => {
 	display: flex;
 	flex-direction: column;
 	background-color: #000000;
+	min-height: 0;
 }
 
 .video-container {
@@ -1680,11 +1998,12 @@ const splitClipAtPlayhead = async () => {
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	padding: 2rem;
+	padding: clamp(1rem, 2vh, 2rem);
 	position: relative;
 	max-width: 100%;
 	overflow: hidden;
 	box-sizing: border-box;
+	min-height: 0;
 }
 
 .empty-preview {
@@ -1821,9 +2140,10 @@ const splitClipAtPlayhead = async () => {
 	flex-direction: column;
 	overflow-x: auto; /* Allow horizontal scroll for long timelines */
 	overflow-y: auto; /* Allow vertical scrolling for tracks */
-	height: 300px; /* Fixed height for timeline */
+	height: clamp(200px, 25vh, 350px); /* Responsive height for timeline */
 	max-width: 100%; /* Prevent horizontal overflow */
 	box-sizing: border-box; /* Include padding/border in width */
+	flex-shrink: 0;
 }
 
 .timeline-header {
@@ -1964,10 +2284,49 @@ const splitClipAtPlayhead = async () => {
 .clip-content-wrapper {
 	flex: 1;
 	display: flex;
-	align-items: center;
+	flex-direction: column;
+	align-items: flex-start;
 	padding: 0 0.75rem;
-	gap: 0.5rem;
+	gap: 0.25rem;
 	min-width: 0;
+}
+
+.clip-metadata-row {
+	display: flex;
+	align-items: center;
+	gap: 0.375rem;
+}
+
+.upload-indicator,
+.error-indicator {
+	font-size: 0.75rem;
+	margin-left: 0.25rem;
+}
+
+.storage-badge-timeline {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	font-size: 0.75rem;
+	padding: 0.125rem 0.25rem;
+	border-radius: 0.25rem;
+	background-color: rgba(0, 0, 0, 0.3);
+	line-height: 1;
+}
+
+.timeline-clip.uploading {
+	opacity: 0.6;
+	border-style: dashed;
+	pointer-events: none;
+}
+
+.timeline-clip.uploading .trim-handle {
+	display: none;
+}
+
+.timeline-clip.failed {
+	border-color: rgb(220 38 38 / 0.5);
+	background: linear-gradient(135deg, rgb(220 38 38 / 0.3) 0%, rgb(219 39 119 / 0.2) 100%);
 }
 
 .timeline-clip:hover {

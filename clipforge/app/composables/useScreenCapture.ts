@@ -1,4 +1,5 @@
 import { ref } from 'vue'
+import { useRecordingWindow } from './useRecordingWindow'
 
 // Check if running in Tauri
 const isTauri = () => {
@@ -39,6 +40,9 @@ export const useScreenCapture = () => {
 	const recordedWebcamBlobUrl = ref<string | null>(null)
 	const error = ref<string | null>(null)
 	
+	// Recording window management
+	const { setupRecordingMode, teardownRecordingMode } = useRecordingWindow()
+	
 	let screenRecorder: MediaRecorder | null = null
 	let webcamRecorder: MediaRecorder | null = null
 	let screenChunks: Blob[] = []
@@ -53,7 +57,7 @@ export const useScreenCapture = () => {
 		// Check if in Tauri - use native recording
 		if (isTauri()) {
 			const { invoke } = await import('@tauri-apps/api/core')
-			const { getScreens, startRecording: startNative } = (await import('./useNativeRecording')).useNativeRecording()
+			const { getScreens, startRecording: startNative, checkScreenRecordingPermission } = (await import('./useNativeRecording')).useNativeRecording()
 			
 			try {
 				// Get available screens
@@ -66,6 +70,18 @@ export const useScreenCapture = () => {
 				// Use primary screen or first available
 				const primaryScreen = screens.find(s => s.is_primary) || screens[0]
 				
+				// Check permissions BEFORE starting recording
+				console.log('🔍 Checking screen recording permissions...')
+				const hasPermission = await checkScreenRecordingPermission(primaryScreen.id)
+				
+				if (!hasPermission) {
+					const errorMsg = 'Screen recording permission not granted. Please check System Settings > Privacy & Security > Screen Recording and ensure VidVeil is enabled. You may need to restart the app after granting permission.'
+					error.value = errorMsg
+					throw new Error(errorMsg)
+				}
+				
+				console.log('✅ Screen recording permission confirmed')
+				
 				// Generate output path in Movies folder
 				const timestamp = Date.now()
 				const homeDir = '/Users/' + (await invoke('get_username') as string).trim()
@@ -76,8 +92,8 @@ export const useScreenCapture = () => {
 				
 				const outputPath = `${recordingsDir}/recording-${timestamp}.mp4`
 				
-				// Start native recording (this will wait for permissions and AVFoundation to initialize)
-				console.log('🎬 Requesting native recording...')
+				// Start native recording (this will wait for AVFoundation to initialize)
+				console.log('🎬 Starting native recording...')
 				console.log('📷 Include webcam:', includeWebcam.value)
 				
 				// Don't set isRecording yet - wait for actual confirmation
@@ -93,6 +109,20 @@ export const useScreenCapture = () => {
 				// Now set isRecording AFTER we're confident it's actually recording
 				isRecording.value = true
 				console.log('✅ Native recording started successfully:', resultPath)
+				
+				// Setup recording mode: minimize window, register global shortcut, show notification
+				// Only do this AFTER permissions are confirmed (so permission dialog can appear if needed)
+				try {
+					await setupRecordingMode(() => {
+						// Callback to stop recording when shortcut is pressed
+						stopRecording()
+					})
+					console.log('✅ Window minimized and shortcuts registered')
+				} catch (err) {
+					console.warn('⚠️ Failed to setup recording window mode:', err)
+					// Continue anyway - recording is still active, just won't auto-minimize
+				}
+				
 				return
 			} catch (err: any) {
 				console.error('Failed to start native recording:', err)
@@ -267,6 +297,17 @@ export const useScreenCapture = () => {
 		screenRecorder.start(1000)
 		isRecording.value = true
 
+		// Setup recording mode: minimize window, register global shortcut, show notification
+		try {
+			await setupRecordingMode(() => {
+				// Callback to stop recording when shortcut is pressed
+				stopRecording()
+			})
+		} catch (err) {
+			console.warn('⚠️ Failed to setup recording window mode:', err)
+			// Continue anyway - recording is still active
+		}
+
 		// Stop recording when user stops sharing screen
 		const videoTrack = displayStream.getVideoTracks()[0]
 		if (videoTrack) {
@@ -303,36 +344,93 @@ export const useScreenCapture = () => {
 					
 					// Create blob URLs for preview/playback from separate recording files
 					try {
-						// Wait a bit for the files to be fully written
+						// Wait for the files to be fully written (with retry logic)
 						console.log('⏳ Waiting for files to be written...')
-						await new Promise(resolve => setTimeout(resolve, 2000))
+						let fileReadSuccessful = false
+						const maxRetries = 5
 						
-						// Check if screen recording file exists
-						console.log('🔍 Checking if screen file exists:', outputPath)
+						for (let attempt = 0; attempt < maxRetries && !fileReadSuccessful; attempt++) {
+							try {
+								await new Promise(resolve => setTimeout(resolve, 2000 + (attempt * 1000)))
+								
+								console.log(`🔍 Attempt ${attempt + 1}/${maxRetries}: Checking if screen file exists:`, outputPath)
+								
+								// Read screen recording
+								const fileBytes = await invoke('read_video_file', { filePath: outputPath }) as number[]
+								
+								// Verify file was read successfully
+								if (!fileBytes || fileBytes.length === 0) {
+									console.warn(`⚠️ Screen file is empty (attempt ${attempt + 1}/${maxRetries}), retrying...`)
+									continue
+								}
+								
+								console.log(`✅ Read ${fileBytes.length} bytes from screen recording file`)
+								
+								const blob = new Blob([new Uint8Array(fileBytes)], { type: 'video/mp4' })
+								
+								// Verify blob size
+								if (blob.size === 0) {
+									console.warn(`⚠️ Screen blob is empty (attempt ${attempt + 1}/${maxRetries}), retrying...`)
+									continue
+								}
+								
+								console.log(`✅ Created blob with size: ${(blob.size / 1024 / 1024).toFixed(2)} MB, type: ${blob.type}`)
+								
+								// Set the blob - this will trigger the watch handler in recorder.vue
+								recordedScreenBlob.value = blob
+								
+								// Also set the blob URL directly (for compatibility)
+								recordedScreenBlobUrl.value = URL.createObjectURL(blob)
+								
+								console.log('📹 Screen recording blob size:', (blob.size / 1024 / 1024).toFixed(2), 'MB')
+								console.log('📹 Screen blob URL created:', recordedScreenBlobUrl.value.substring(0, 50) + '...')
+								fileReadSuccessful = true
+							} catch (readErr: any) {
+								console.error(`❌ Failed to read screen file (attempt ${attempt + 1}/${maxRetries}):`, {
+									message: readErr.message,
+									stack: readErr.stack,
+									outputPath
+								})
+								if (attempt < maxRetries - 1) {
+									console.warn(`⚠️ Retrying in ${2000 + (attempt * 1000)}ms...`)
+									continue
+								} else {
+									throw readErr
+								}
+							}
+						}
 						
-						// Read screen recording
-						const fileBytes = await invoke('read_video_file', { filePath: outputPath }) as number[]
-						const blob = new Blob([new Uint8Array(fileBytes)], { type: 'video/mp4' })
-						
-						recordedScreenBlob.value = blob
-						recordedScreenBlobUrl.value = URL.createObjectURL(blob)
-						
-						console.log('📹 Screen recording blob size:', (blob.size / 1024 / 1024).toFixed(2), 'MB')
+						if (!fileReadSuccessful) {
+							const errorMsg = 'Failed to read screen recording file after multiple attempts. The file may be corrupted or still being written.'
+							console.error('❌', errorMsg, { outputPath, maxRetries })
+							throw new Error(errorMsg)
+						}
 						
 						// Try to read webcam recording if it exists
 						const webcamPath = outputPath.replace('.mp4', '-webcam.mp4')
 						try {
 							console.log('🔍 Checking if webcam file exists:', webcamPath)
 							const webcamBytes = await invoke('read_video_file', { filePath: webcamPath }) as number[]
-							const webcamBlob = new Blob([new Uint8Array(webcamBytes)], { type: 'video/mp4' })
 							
-							recordedWebcamBlob.value = webcamBlob
-							recordedWebcamBlobUrl.value = URL.createObjectURL(webcamBlob)
-							
-							console.log('📹 Webcam blob size:', (webcamBlob.size / 1024 / 1024).toFixed(2), 'MB')
-							console.log('✅ Both recordings ready for preview')
+							if (webcamBytes && webcamBytes.length > 0) {
+								const webcamBlob = new Blob([new Uint8Array(webcamBytes)], { type: 'video/mp4' })
+								
+								if (webcamBlob.size > 0) {
+									recordedWebcamBlob.value = webcamBlob
+									recordedWebcamBlobUrl.value = URL.createObjectURL(webcamBlob)
+									
+									console.log('📹 Webcam blob size:', (webcamBlob.size / 1024 / 1024).toFixed(2), 'MB')
+									console.log('✅ Both recordings ready for preview')
+								} else {
+									console.warn('📷 Webcam blob is empty, skipping')
+									recordedWebcamBlob.value = null
+									recordedWebcamBlobUrl.value = ''
+								}
+							} else {
+								throw new Error('Webcam file is empty')
+							}
 						} catch (webcamErr: any) {
-							console.log('📷 No webcam recording found (this is normal if webcam was disabled)')
+							console.log('📷 No webcam recording found (this is normal if webcam was disabled):', webcamErr.message)
 							recordedWebcamBlob.value = null
 							recordedWebcamBlobUrl.value = ''
 						}
@@ -340,26 +438,58 @@ export const useScreenCapture = () => {
 						console.log('✅ Recording ready for preview')
 						
 					} catch (err: any) {
-						console.error('Failed to create preview:', err)
+						console.error('❌ Failed to create preview:', {
+							message: err.message,
+							stack: err.stack,
+							outputPath,
+							hasOutputPath: !!outputPath
+						})
+						
+						// Set screen blob to null if read failed, so UI can show appropriate error
+						recordedScreenBlob.value = null
+						recordedScreenBlobUrl.value = ''
+						
 						// Don't throw - the file still exists on disk even if preview fails
-						console.warn('⚠️ Preview failed but recording is saved to:', outputPath)
+						console.warn('⚠️ Preview failed but recording may be saved to:', outputPath)
 						
 						// Try to check if file exists using file system
 						try {
 							const fileInfo = await invoke('get_file_info', { filePath: outputPath })
 							console.log('📁 File info:', fileInfo)
-						} catch (fsErr) {
-							console.error('File system check failed:', fsErr)
+						} catch (fsErr: any) {
+							console.error('❌ File system check failed:', {
+								message: fsErr.message,
+								outputPath
+							})
 						}
+						
+						// Set error message for UI
+						error.value = `Failed to load preview: ${err.message}. The recording may still be saved at ${outputPath}`
 					}
 				}
 				
 				isRecording.value = false
+				
+				// Teardown recording mode: restore window, unregister shortcut
+				try {
+					await teardownRecordingMode()
+				} catch (err) {
+					console.warn('⚠️ Failed to teardown recording window mode:', err)
+				}
+				
 				return outputPath
 			} catch (err: any) {
 				console.error('Failed to stop native recording:', err)
 				error.value = err.message || 'Failed to stop recording'
 				isRecording.value = false
+				
+				// Teardown even on error
+				try {
+					await teardownRecordingMode()
+				} catch (teardownErr) {
+					console.warn('⚠️ Failed to teardown recording window mode:', teardownErr)
+				}
+				
 				return null
 			}
 		}
@@ -383,6 +513,13 @@ export const useScreenCapture = () => {
 		}
 
 		isRecording.value = false
+		
+		// Teardown recording mode: restore window, unregister shortcut
+		try {
+			await teardownRecordingMode()
+		} catch (err) {
+			console.warn('⚠️ Failed to teardown recording window mode:', err)
+		}
 	}
 
 	const reset = () => {

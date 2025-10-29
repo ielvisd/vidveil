@@ -29,10 +29,26 @@
 	--color-background: #000000;
 	--color-surface: #0a0a0a;
 	--color-surface-elevated: #1a1a1a;
+	
+	/* Responsive spacing for viewport-aware layouts */
+	--spacing-compact: clamp(0.5rem, 1vh, 0.75rem);
+	--spacing-normal: clamp(0.75rem, 1.5vh, 1.5rem);
+	--spacing-large: clamp(1rem, 2.5vh, 2rem);
 }
 
 @layer base {
 	-webkit-tap-highlight-color: transparent;
+	
+	/* Tauri desktop app height chain - fixes 100vh overflow issues */
+	html, body {
+		height: 100%;
+		overflow: hidden;
+	}
+	
+	#__nuxt {
+		height: 100%;
+		overflow: hidden;
+	}
 	
 	/* Dark theme base */
 	body {
@@ -53,6 +69,12 @@
 	}
 	.absolute-center-v {
 		@apply top-1/2 transform -translate-y-1/2;
+	}
+	
+	/* Viewport-fit utility for Tauri apps */
+	.viewport-fit {
+		height: 100%;
+		overflow: hidden;
 	}
 }
 

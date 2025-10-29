@@ -147,6 +147,28 @@ export const useNativeRecording = () => {
 		}
 	}
 
+	/**
+	 * Check screen recording permission status
+	 */
+	const checkScreenRecordingPermission = async (screenId: string): Promise<boolean> => {
+		if (!isTauri()) {
+			// In browser mode, permissions are handled by getUserMedia/getDisplayMedia
+			return true
+		}
+
+		try {
+			const { invoke } = await import('@tauri-apps/api/core')
+			const granted = await invoke<boolean>('check_screen_recording_permission', {
+				screenId
+			})
+			return granted
+		} catch (err: any) {
+			console.error('Failed to check screen recording permission:', err)
+			error.value = err.message || 'Failed to check permission'
+			return false
+		}
+	}
+
 	return {
 		// State
 		availableScreens,
@@ -160,6 +182,7 @@ export const useNativeRecording = () => {
 		startRecording,
 		stopRecording,
 		checkRecordingStatus,
+		checkScreenRecordingPermission,
 		isTauri
 	}
 }

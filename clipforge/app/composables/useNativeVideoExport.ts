@@ -21,6 +21,7 @@ export interface ExportProgress {
   current_step: string
   total_steps: number
   current_step_number: number
+  output_path?: string
 }
 
 export const useNativeVideoExport = () => {
@@ -90,6 +91,45 @@ export const useNativeVideoExport = () => {
   }
 
   /**
+   * Convert IndexedDB URL to temporary file path
+   */
+  const convertIndexedDBToTempFile = async (indexeddbUrl: string): Promise<string> => {
+    try {
+      const { getVideoFromIndexedDB } = await import('~/utils/indexedDB')
+      
+      // Extract clip ID from indexeddb:// URL
+      const clipId = indexeddbUrl.replace('indexeddb://', '')
+      console.log(`📦 Reading clip from IndexedDB: ${clipId}`)
+      
+      // Get blob from IndexedDB
+      const blob = await getVideoFromIndexedDB(clipId)
+      if (!blob) {
+        throw new Error(`Clip not found in IndexedDB: ${clipId}`)
+      }
+      
+      // Convert blob to array buffer
+      const arrayBuffer = await blob.arrayBuffer()
+      const uint8Array = new Uint8Array(arrayBuffer)
+      
+      // Generate a temporary file path
+      const tempFileName = `temp_clip_${clipId}_${Date.now()}.mp4`
+      const tempPath = `/tmp/${tempFileName}`
+      
+      // Save to temporary file using Tauri command
+      await invoke('save_blob_to_temp_file', {
+        data: Array.from(uint8Array),
+        filePath: tempPath
+      })
+      
+      console.log(`✅ Converted IndexedDB clip to temp file: ${tempPath}`)
+      return tempPath
+    } catch (err) {
+      console.error('Failed to convert IndexedDB URL to temp file:', err)
+      throw new Error(`Failed to convert IndexedDB URL to temporary file: ${err}`)
+    }
+  }
+
+  /**
    * Convert Vue Clip objects to Tauri VideoClip format
    */
   const convertClipsToTauriFormat = async (clips: Clip[]): Promise<VideoClip[]> => {
@@ -102,12 +142,21 @@ export const useNativeVideoExport = () => {
         metadata: clip.metadata
       })
       
-      // Handle blob URLs by converting them to temporary files
+      // Handle different URL types by converting them to temporary files
       let clipPath = clip.src
       if (clip.src.startsWith('blob:')) {
         console.log(`🔄 Converting blob URL to temp file for clip ${index}`)
         clipPath = await convertBlobToTempFile(clip.src)
         console.log(`✅ Converted blob to temp file: ${clipPath}`)
+      } else if (clip.src.startsWith('indexeddb://')) {
+        console.log(`🔄 Converting IndexedDB URL to temp file for clip ${index}`)
+        clipPath = await convertIndexedDBToTempFile(clip.src)
+        console.log(`✅ Converted IndexedDB to temp file: ${clipPath}`)
+      } else if (clip.src.startsWith('http://') || clip.src.startsWith('https://')) {
+        // Handle Supabase or other HTTP URLs
+        console.log(`🔄 Converting HTTP URL to temp file for clip ${index}`)
+        clipPath = await convertBlobToTempFile(clip.src)
+        console.log(`✅ Converted HTTP URL to temp file: ${clipPath}`)
       }
       
       return {
@@ -181,8 +230,9 @@ export const useNativeVideoExport = () => {
       exportProgress.value = 100
       currentStep.value = 'Export complete!'
       
-      console.log('✅ Native video export completed successfully')
-      return { success: true, outputPath: fileName }
+      const outputPath = result.output_path || fileName
+      console.log('✅ Native video export completed successfully:', outputPath)
+      return { success: true, outputPath }
 
     } catch (err: any) {
       console.error('❌ Native export failed:', err)

@@ -79,6 +79,7 @@ pub struct ExportProgress {
     pub current_step: String,
     pub total_steps: u32,
     pub current_step_number: u32,
+    pub output_path: Option<String>,
 }
 
 // Helper function to convert C string to Rust string
@@ -135,16 +136,25 @@ pub async fn export_video_native(
         let screen_path = string_to_c_string(&screen_clip.path);
         let webcam_path = webcam_clip.map(|c| string_to_c_string(&c.path));
         
-        // Ensure output path is absolute
+        // Ensure output path is absolute and save to Downloads folder if relative
         let absolute_output_path = if output_path.starts_with('/') {
             output_path.clone()
         } else {
-            // Get current directory and make path absolute
-            std::env::current_dir()
-                .unwrap_or_else(|_| std::path::PathBuf::from("."))
-                .join(&output_path)
-                .to_string_lossy()
-                .to_string()
+            // Use Downloads folder as default save location
+            let home_dir = std::env::var("HOME")
+                .unwrap_or_else(|_| String::from("."));
+            let downloads_path = std::path::PathBuf::from(&home_dir)
+                .join("Downloads")
+                .join(&output_path);
+            
+            // Ensure Downloads directory exists
+            if let Some(parent) = downloads_path.parent() {
+                if let Err(e) = std::fs::create_dir_all(parent) {
+                    println!("⚠️ Warning: Could not create Downloads directory: {}", e);
+                }
+            }
+            
+            downloads_path.to_string_lossy().to_string()
         };
         
         let output_path_c = string_to_c_string(&absolute_output_path);
@@ -193,6 +203,7 @@ pub async fn export_video_native(
                 current_step: c_str_to_string(&result.current_step),
                 total_steps: 1,
                 current_step_number: 1,
+                output_path: Some(absolute_output_path),
             })
         } else {
             Err(c_str_to_string(&result.error_message))
@@ -216,6 +227,7 @@ pub async fn get_export_progress() -> Result<ExportProgress, String> {
             current_step: c_str_to_string(&result.current_step),
             total_steps: 1,
             current_step_number: 1,
+            output_path: None,
         })
     }
     
@@ -264,4 +276,31 @@ pub async fn get_video_info(file_path: String) -> Result<serde_json::Value, Stri
     }
 
     Ok(serde_json::Value::Object(info))
+}
+
+#[command]
+pub async fn reveal_file_in_finder(file_path: String) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        use std::process::Command;
+        
+        // Use macOS 'open' command with -R flag to reveal file in Finder
+        let output = Command::new("open")
+            .arg("-R")
+            .arg(&file_path)
+            .output()
+            .map_err(|e| format!("Failed to execute open command: {}", e))?;
+        
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("Failed to reveal file in Finder: {}", stderr));
+        }
+        
+        Ok(())
+    }
+    
+    #[cfg(not(target_os = "macos"))]
+    {
+        Err("Reveal in Finder is only available on macOS".to_string())
+    }
 }

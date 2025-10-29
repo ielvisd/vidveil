@@ -19,6 +19,7 @@
 		"notification:default",
 		"os:default",
 		"fs:default",
-		"store:default"
+		"store:default",
+		"global-shortcut:default"
 	]
 }

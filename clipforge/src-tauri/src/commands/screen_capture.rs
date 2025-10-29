@@ -1,4 +1,4 @@
-use tauri::command;
+use tauri::{command, AppHandle};
 use std::sync::{Arc, Mutex};
 
 // Recording state management
@@ -31,6 +31,7 @@ pub async fn get_available_screens() -> Result<Vec<ScreenInfo>, String> {
 /// Start native screen recording
 #[command]
 pub async fn start_screen_recording(
+    _app: AppHandle,
     screen_id: String,
     include_audio: bool,
     include_webcam: bool,
@@ -75,12 +76,16 @@ pub async fn start_screen_recording(
         state.output_path = Some(output_path.clone());
     }
     
+    // Note: Menu item enabling disabled for now due to type complexity
+    // Users can still stop recording via global shortcut (Cmd/Ctrl+Shift+S) or tray menu
+    // The stop button will work if clicked, but may appear disabled in some cases
+    
     Ok(output_path)
 }
 
 /// Stop native screen recording
 #[command]
-pub async fn stop_screen_recording() -> Result<String, String> {
+pub async fn stop_screen_recording(_app: AppHandle) -> Result<String, String> {
     // Check state first, then release mutex before await
     {
         let state = RECORDING_STATE.lock().map_err(|e| e.to_string())?;
@@ -107,6 +112,8 @@ pub async fn stop_screen_recording() -> Result<String, String> {
         state.output_path.take().unwrap_or_default()
     };
     
+    // Note: Menu item disabling handled automatically when recording stops
+    
     Ok(output_path)
 }
 
@@ -122,6 +129,21 @@ pub fn is_recording() -> Result<bool, String> {
     {
         let state = RECORDING_STATE.lock().map_err(|e| e.to_string())?;
         Ok(state.is_recording)
+    }
+}
+
+/// Check screen recording permission status
+#[command]
+pub fn check_screen_recording_permission(screen_id: String) -> Result<bool, String> {
+    #[cfg(target_os = "macos")]
+    {
+        macos::check_screen_recording_permission(screen_id)
+    }
+    
+    #[cfg(not(target_os = "macos"))]
+    {
+        // On non-macOS platforms, assume permission is granted (no permission system)
+        Ok(true)
     }
 }
 
@@ -174,6 +196,10 @@ mod macos {
     
     pub fn check_is_recording() -> bool {
         macos_capture::is_recording()
+    }
+    
+    pub fn check_screen_recording_permission(screen_id: String) -> Result<bool, String> {
+        macos_capture::check_screen_recording_permission(screen_id)
     }
 }
 

@@ -28,6 +28,8 @@ extern "C" {
     fn stop_screen_recording_objc() -> CaptureResult;
     
     fn is_recording_objc() -> bool;
+    
+    fn check_screen_recording_permission_objc(display_id: u32) -> std::os::raw::c_int;
 }
 
 // Store recording state
@@ -158,4 +160,18 @@ pub fn is_recording() -> bool {
     unsafe {
         is_recording_objc()
     }
+}
+
+pub fn check_screen_recording_permission(screen_id: String) -> Result<bool, String> {
+    // Parse display ID
+    let display_id: u32 = screen_id.parse()
+        .map_err(|_| "Invalid screen ID".to_string())?;
+    
+    // Call Objective-C wrapper
+    let result = unsafe {
+        check_screen_recording_permission_objc(display_id)
+    };
+    
+    // Return true if permission is granted (result == 1), false otherwise
+    Ok(result == 1)
 }

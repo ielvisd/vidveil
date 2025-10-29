@@ -1,205 +1,368 @@
 <template>
 	<div class="recorder-page">
-		<!-- Top Bar -->
-		<div class="top-bar">
-			<UButton 
-				@click="goBack" 
-				icon="i-heroicons-arrow-left" 
-				variant="ghost"
-				size="sm"
-			>
-				Back
-			</UButton>
-			<h1>Screen Recorder</h1>
-			<div class="spacer" />
-			<UButton 
-				@click="goToProjectEditor" 
-				icon="i-heroicons-pencil-square"
-				color="primary"
-				size="sm"
-			>
-				Open Editor
-			</UButton>
-		</div>
-
-		<!-- Main Content -->
-		<div class="recorder-content">
-			<!-- Preview Area -->
-			<div class="recording-area">
-				<!-- Not recording yet -->
-			<div v-if="!isRecording && !recordedScreenBlob" class="start-prompt">
-				<i class="i-heroicons-video-camera text-4xl text-gray-600" />
-				<h2>Ready to Record</h2>
-				<p>Click the record button below to start capturing</p>
-				<div class="editor-hint">
-					💡 <strong>Tip:</strong> After recording, use the "Open Editor" button above to access clips, shapes, and timeline
+		<!-- Fixed Header -->
+		<header class="recorder-header">
+			<div class="header-content">
+				<UButton 
+					@click="goBack" 
+					icon="i-heroicons-arrow-left" 
+					variant="ghost"
+					size="sm"
+					color="neutral"
+				>
+					Back
+				</UButton>
+				<h1 class="header-title">Screen Recorder</h1>
+				<div class="header-actions">
+					<UButton 
+						@click="goToProjectEditor" 
+						icon="i-heroicons-pencil-square"
+						color="primary"
+						size="sm"
+					>
+						Open Editor
+					</UButton>
 				</div>
 			</div>
-				
-			<!-- Currently Recording -->
-			<div v-else-if="isRecording" class="recording-active">
-				<!-- Native Recording Mode (no live preview) -->
-				<div v-if="!screenStream" class="native-recording-indicator">
-					<div class="pulse-indicator">
-						<div class="pulse-ring"></div>
-						<i class="i-heroicons-video-camera text-8xl text-red-500" />
-					</div>
-					<h2 class="text-white">🔴 Recording Screen</h2>
-					<p class="text-gray-300">Native desktop recording in progress</p>
-					<p class="text-sm text-gray-400 mt-4">{{ recordingTime }}</p>
-					<p class="text-xs text-gray-500 mt-2">Preview will be available after stopping</p>
-				</div>
-				
-				<!-- Browser Mode Recording (with live preview) -->
-				<div v-else class="preview-pip-container">
-					<!-- Screen Preview (Main) -->
-					<video
-						ref="screenPreview"
-						:srcObject="screenStream"
-						autoplay
-						muted
-						class="preview-video-main"
-					/>
-					
-					<!-- Webcam Preview (PiP Overlay) -->
-					<div v-if="webcamStream" class="preview-pip-overlay">
-						<video
-							ref="webcamPreview"
-							:srcObject="webcamStream"
-							autoplay
-							muted
-							class="preview-video-pip"
-						/>
-					</div>
+		</header>
+
+		<!-- Main Preview Area -->
+		<main class="preview-container">
+			<div class="preview-wrapper">
+				<!-- Not recording yet -->
+				<div v-if="!isRecording && !recordedScreenBlob" class="ready-state">
+					<UCard variant="soft" class="empty-state-card">
+						<template #default>
+							<div class="empty-state">
+								<UIcon name="i-heroicons-video-camera" class="empty-icon" />
+								<h2 class="empty-title">Ready to Record</h2>
+								<p class="empty-description">Click the record button below to start capturing your screen</p>
+							</div>
+						</template>
+					</UCard>
+
+					<!-- Quick Settings -->
+					<UCard variant="outline" class="quick-settings-card">
+						<template #default>
+							<div class="quick-settings">
+								<!-- Webcam Toggle -->
+								<div class="quick-setting-item">
+									<div class="quick-setting-info">
+										<label class="quick-setting-label">Include Webcam</label>
+										<p class="quick-setting-desc">Record webcam as separate PiP overlay</p>
+									</div>
+									<USwitch 
+										v-model="includeWebcam"
+										color="primary"
+									/>
+								</div>
+
+								<!-- Audio Source Info -->
+								<div class="quick-setting-item">
+									<div class="quick-setting-info">
+										<label class="quick-setting-label">Audio Source</label>
+										<p class="quick-setting-desc">System Audio + Microphone</p>
+									</div>
+								</div>
+							</div>
+						</template>
+					</UCard>
 				</div>
 
-					<div class="recording-indicator">
-						<div class="recording-dot"></div>
-						<span>Recording...</span>
-						<span class="recording-time">{{ recordingTime }}</span>
+				<!-- Currently Recording -->
+				<div v-else-if="isRecording" class="recording-state">
+					<!-- Native Recording Mode (no live preview) -->
+					<UCard v-if="!screenStream" variant="soft" class="recording-card">
+						<template #default>
+							<div class="native-recording-indicator">
+								<div class="pulse-indicator">
+									<div class="pulse-ring"></div>
+									<UIcon name="i-heroicons-video-camera" class="recording-icon" />
+								</div>
+								<h2 class="recording-title">Recording Screen</h2>
+								<p class="recording-subtitle">Native desktop recording in progress</p>
+								<UBadge 
+									color="error" 
+									variant="soft" 
+									:icon="isRecording ? 'i-heroicons-circle' : undefined"
+									size="lg"
+									class="mt-4"
+								>
+									{{ recordingTime }}
+								</UBadge>
+								<p class="recording-hint">Preview will be available after stopping</p>
+							</div>
+						</template>
+					</UCard>
+
+					<!-- Browser Mode Recording (with live preview) -->
+					<div v-else class="live-preview-container">
+						<div class="preview-pip-container">
+							<!-- Screen Preview (Main) -->
+							<video
+								ref="screenPreview"
+								:srcObject="screenStream"
+								autoplay
+								muted
+								class="preview-video-main"
+							/>
+							
+							<!-- Webcam Preview (PiP Overlay) -->
+							<div v-if="webcamStream" class="preview-pip-overlay">
+								<video
+									ref="webcamPreview"
+									:srcObject="webcamStream"
+									autoplay
+									muted
+									class="preview-video-pip"
+								/>
+							</div>
+
+							<!-- Recording Indicator Overlay -->
+							<div class="recording-overlay-badge">
+								<UBadge 
+									color="error" 
+									variant="solid"
+									:icon="isRecording ? 'i-heroicons-circle' : undefined"
+									size="lg"
+								>
+									{{ recordingTime }}
+								</UBadge>
+							</div>
+						</div>
 					</div>
 				</div>
 
 				<!-- Recording Complete -->
-				<div v-else-if="recordedScreenBlob" class="playback-area">
-					<h3>Recording Complete!</h3>
-					<p class="preview-note">Preview how your PiP video will look in the editor</p>
-					
-					<!-- Preview with PiP Layout -->
-					<div class="preview-pip-container playback-preview">
-						<!-- Screen Video (Main) -->
-						<video 
-							v-if="screenBlobUrl"
-							:src="screenBlobUrl" 
-							controls
-							class="preview-video-main"
-							preload="metadata"
-							@loadedmetadata="handlePlaybackLoaded"
-							@error="handleVideoError"
-						/>
-						
-						<!-- Webcam Video (PiP Overlay) -->
-						<div v-if="recordedWebcamBlob && webcamBlobUrl" class="preview-pip-overlay">
-							<video 
-								:src="webcamBlobUrl" 
-								ref="webcamPlayback"
-								class="preview-video-pip"
-								preload="metadata"
-								muted
-								@error="handleVideoError"
-							/>
-							<div class="audio-indicator">
-								<i class="i-heroicons-microphone text-xs" />
-								<span class="audio-label">Audio in main track</span>
+				<div v-else-if="recordedScreenBlob || recordedWebcamBlob" class="playback-area">
+					<UCard variant="outline" class="playback-card">
+						<template #header>
+							<div class="flex items-center justify-between">
+								<div>
+									<h3 class="text-lg font-semibold">Recording Complete!</h3>
+									<p class="text-sm text-muted mt-1">Preview your recording before saving</p>
+								</div>
+								<UBadge color="success" variant="soft" size="lg">
+									Ready
+								</UBadge>
 							</div>
-						</div>
-					</div>
-
-					<div class="recording-actions">
-						<UButton 
-							@click="saveRecordings"
-							:disabled="saving || !currentProject"
-							:loading="saving"
-							color="primary"
-							icon="i-heroicons-check"
-							size="lg"
-						>
-							{{ saving ? 'Saving...' : (currentProject ? 'Add to Project' : 'No Project Selected') }}
-						</UButton>
-						<UButton 
-							@click="discardRecordings"
-							:disabled="saving"
-							variant="outline"
-							icon="i-heroicons-trash"
-						>
-							Discard & Re-record
-						</UButton>
-					</div>
-					<p v-if="!currentProject" class="no-project-warning">
-						⚠️ Please select a project first to save recordings
-					</p>
+						</template>
+						<template #default>
+							<!-- Preview with PiP Layout -->
+							<div class="preview-pip-container playback-preview">
+								<!-- Screen Video (Main) -->
+								<video 
+									v-if="screenBlobUrl"
+									:src="screenBlobUrl" 
+									controls
+									class="preview-video-main"
+									preload="metadata"
+									@loadedmetadata="handlePlaybackLoaded"
+									@error="handleVideoError"
+								/>
+								
+								<!-- Error State: Screen recording missing -->
+								<div v-else-if="!screenBlobUrl && recordedWebcamBlob" class="preview-error-state">
+									<UIcon name="i-heroicons-exclamation-triangle" class="error-icon" />
+									<h3 class="error-title">Screen Recording Unavailable</h3>
+									<p class="error-message">The screen recording could not be loaded, but webcam recording is available.</p>
+									<p class="error-hint">This may occur if screen recording permission was not granted during recording.</p>
+								</div>
+								
+								<!-- Empty state if both are missing -->
+								<div v-else class="preview-error-state">
+									<UIcon name="i-heroicons-video-camera-slash" class="error-icon" />
+									<h3 class="error-title">No Recording Available</h3>
+									<p class="error-message">Both screen and webcam recordings are unavailable.</p>
+								</div>
+								
+								<!-- Webcam Video (PiP Overlay) -->
+								<div v-if="recordedWebcamBlob && webcamBlobUrl" class="preview-pip-overlay">
+									<video 
+										:src="webcamBlobUrl" 
+										ref="webcamPlayback"
+										class="preview-video-pip"
+										preload="metadata"
+										muted
+										@error="handleVideoError"
+									/>
+									<div class="audio-indicator">
+										<UIcon name="i-heroicons-microphone" class="size-3" />
+										<span class="audio-label">Audio</span>
+									</div>
+								</div>
+							</div>
+						</template>
+						<template #footer>
+							<div class="flex items-center gap-3 justify-end">
+								<UButton 
+									@click="discardRecordings"
+									:disabled="saving"
+									variant="outline"
+									color="neutral"
+									icon="i-heroicons-trash"
+								>
+									Discard
+								</UButton>
+								<UButton 
+									@click="saveRecordings"
+									:disabled="saving || !currentProject"
+									:loading="saving"
+									color="primary"
+									icon="i-heroicons-check"
+								>
+									{{ saving ? 'Saving...' : (currentProject ? 'Add to Project' : 'Select Project') }}
+								</UButton>
+							</div>
+							<UAlert 
+								v-if="!currentProject" 
+								color="warning" 
+								variant="soft"
+								icon="i-heroicons-exclamation-triangle"
+								class="mt-3"
+							>
+								Please select a project to save recordings
+							</UAlert>
+						</template>
+					</UCard>
 				</div>
-			</div>
 
-			<!-- Recording Controls -->
-			<div class="controls-area">
-				<div v-if="!isRecording && !recordedScreenBlob" class="control-buttons">
+				<!-- Error Display -->
+				<UAlert 
+					v-if="error" 
+					color="error" 
+					variant="soft"
+					icon="i-heroicons-exclamation-circle"
+					:title="error"
+					class="mt-4"
+				/>
+			</div>
+		</main>
+
+		<!-- Fixed Bottom Control Bar -->
+		<footer class="control-bar">
+			<div class="control-bar-content">
+				<!-- Settings/Options Button -->
+				<UButton 
+					@click="settingsOpen = !settingsOpen"
+					icon="i-heroicons-cog-6-tooth"
+					variant="ghost"
+					size="lg"
+					color="neutral"
+					:class="{ 'ring-2 ring-primary': settingsOpen }"
+					class="control-action"
+				/>
+
+				<!-- Main Record Button -->
+				<div class="record-button-container">
 					<UButton 
+						v-if="!isRecording && !recordedScreenBlob"
 						@click="startRecording"
 						color="error"
 						size="xl"
 						icon="i-heroicons-video-camera"
+						:class="'record-button'"
 					>
 						Start Recording
 					</UButton>
-				</div>
-				<div v-else-if="isRecording" class="control-buttons">
 					<UButton 
+						v-else-if="isRecording"
 						@click="stopRecording"
-						color="neutral"
+						color="error"
 						size="xl"
 						icon="i-heroicons-stop"
+						variant="solid"
+						:class="'record-button recording-active'"
 					>
 						Stop Recording
 					</UButton>
-				</div>
-			</div>
-
-			<!-- Options -->
-			<div class="options-area">
-				<div class="option-card">
-					<h3>Recording Options</h3>
-					<div class="option-list">
-						<div class="option-item">
-							<label class="toggle-label">
-							<input 
-								type="checkbox" 
-								v-model="includeWebcam"
-								class="toggle-checkbox"
-							/>
-							<span>Include Webcam</span>
-						</label>
-						<p class="option-help">Record webcam as separate PiP overlay</p>
-						</div>
-						<div class="option-item">
-							<label>Audio Source</label>
-							<p class="option-value">System Audio + Microphone</p>
-							<p class="option-help">Automatically captured from screen share</p>
-						</div>
-						<div class="option-item">
-							<label>Format</label>
-							<p class="option-value">WebM (VP9)</p>
-							<p class="option-help">Optimized for editing</p>
-						</div>
+					<div v-else class="recording-status-display">
+						<UBadge 
+							v-if="recordedScreenBlob"
+							color="success" 
+							variant="soft" 
+							size="lg"
+						>
+							Recording saved
+						</UBadge>
 					</div>
 				</div>
 
-				<div v-if="error" class="option-card error-card">
-					<h3>Error</h3>
-					<p class="error-text">{{ error }}</p>
+				<!-- Quick Actions -->
+				<div class="quick-actions">
+					<UBadge 
+						v-if="isRecording"
+						color="error" 
+						variant="soft"
+						size="lg"
+						class="recording-badge"
+					>
+						<UIcon name="i-heroicons-circle" class="pulse-dot" />
+						{{ recordingTime }}
+					</UBadge>
+					<UButton 
+						v-if="!isRecording && !recordedScreenBlob"
+						@click="toggleWebcam"
+						:variant="includeWebcam ? 'soft' : 'ghost'"
+						:color="includeWebcam ? 'primary' : 'neutral'"
+						icon="i-heroicons-video-camera"
+						size="lg"
+						class="control-action"
+					>
+						Webcam
+					</UButton>
 				</div>
 			</div>
-		</div>
+		</footer>
+
+		<!-- Settings Modal -->
+		<UModal v-model:open="settingsOpen" title="Recording Settings">
+			<template #body>
+				<div class="settings-content space-y-4">
+					<!-- Webcam Toggle -->
+					<div class="flex items-center justify-between">
+						<div class="flex-1 mr-4">
+							<label class="text-sm font-medium block">Include Webcam</label>
+							<p class="text-xs text-muted mt-1">Record webcam as separate PiP overlay</p>
+						</div>
+						<USwitch 
+							v-model="includeWebcam"
+							color="primary"
+						/>
+					</div>
+
+					<USeparator />
+
+					<!-- Audio Source -->
+					<div>
+						<label class="text-sm font-medium block">Audio Source</label>
+						<p class="text-sm text-muted mt-1">System Audio + Microphone</p>
+						<p class="text-xs text-muted mt-0.5">Automatically captured from screen share</p>
+					</div>
+
+					<USeparator />
+
+					<!-- Format -->
+					<div>
+						<label class="text-sm font-medium block">Format</label>
+						<p class="text-sm text-muted mt-1">WebM (VP9)</p>
+						<p class="text-xs text-muted mt-0.5">Optimized for editing</p>
+					</div>
+
+					<UAlert 
+						v-if="error" 
+						color="error" 
+						variant="soft"
+						icon="i-heroicons-exclamation-circle"
+						class="mt-4"
+					>
+						<template #title>
+							{{ error }}
+						</template>
+					</UAlert>
+				</div>
+			</template>
+		</UModal>
 	</div>
 </template>
 
@@ -229,18 +392,7 @@ const webcamPlayback = ref<HTMLVideoElement | null>(null)
 const recordingTime = ref('00:00')
 const recordingInterval = ref<NodeJS.Timeout | null>(null)
 const recordingStartTime = ref<number>(0)
-
-// PiP configuration for preview
-const pipConfig = ref({
-	x: 80, // Position from right
-	y: 80, // Position from bottom  
-	width: 20, // Width percentage
-	height: 20, // Height percentage
-	shape: 'circle',
-	borderWidth: 3,
-	borderColor: '#fff',
-	shadow: true
-})
+const settingsOpen = ref(false)
 
 // Use refs instead of computed to avoid recreating URLs
 const screenBlobUrl = ref('')
@@ -248,28 +400,58 @@ const webcamBlobUrl = ref('')
 
 // Watch for blob changes and create URLs once
 watch(recordedScreenBlob, (newBlob) => {
+	console.log('🔔 recordedScreenBlob changed:', {
+		hasBlob: !!newBlob,
+		size: newBlob ? (newBlob.size / 1024 / 1024).toFixed(2) + ' MB' : '0',
+		type: newBlob?.type,
+		currentUrl: screenBlobUrl.value ? 'exists' : 'none'
+	})
+	
 	if (screenBlobUrl.value) {
 		URL.revokeObjectURL(screenBlobUrl.value)
+		screenBlobUrl.value = ''
 	}
+	
 	if (newBlob) {
-		console.log('📹 Screen blob size:', (newBlob.size / 1024 / 1024).toFixed(2), 'MB')
-		screenBlobUrl.value = URL.createObjectURL(newBlob)
+		try {
+			console.log('📹 Screen blob size:', (newBlob.size / 1024 / 1024).toFixed(2), 'MB')
+			screenBlobUrl.value = URL.createObjectURL(newBlob)
+			console.log('✅ Screen blob URL created:', screenBlobUrl.value.substring(0, 50) + '...')
+		} catch (err: any) {
+			console.error('❌ Failed to create screen blob URL:', err)
+			screenBlobUrl.value = ''
+		}
 	} else {
 		screenBlobUrl.value = ''
 	}
-})
+}, { immediate: true })
 
 watch(recordedWebcamBlob, (newBlob) => {
+	console.log('🔔 recordedWebcamBlob changed:', {
+		hasBlob: !!newBlob,
+		size: newBlob ? (newBlob.size / 1024 / 1024).toFixed(2) + ' MB' : '0',
+		type: newBlob?.type,
+		currentUrl: webcamBlobUrl.value ? 'exists' : 'none'
+	})
+	
 	if (webcamBlobUrl.value) {
 		URL.revokeObjectURL(webcamBlobUrl.value)
+		webcamBlobUrl.value = ''
 	}
+	
 	if (newBlob) {
-		console.log('📷 Webcam blob size:', (newBlob.size / 1024 / 1024).toFixed(2), 'MB')
-		webcamBlobUrl.value = URL.createObjectURL(newBlob)
+		try {
+			console.log('📷 Webcam blob size:', (newBlob.size / 1024 / 1024).toFixed(2), 'MB')
+			webcamBlobUrl.value = URL.createObjectURL(newBlob)
+			console.log('✅ Webcam blob URL created:', webcamBlobUrl.value.substring(0, 50) + '...')
+		} catch (err: any) {
+			console.error('❌ Failed to create webcam blob URL:', err)
+			webcamBlobUrl.value = ''
+		}
 	} else {
 		webcamBlobUrl.value = ''
 	}
-})
+}, { immediate: true })
 
 const startRecording = async () => {
 	await startCapture()
@@ -295,6 +477,10 @@ const stopRecording = () => {
 	}
 }
 
+const toggleWebcam = () => {
+	includeWebcam.value = !includeWebcam.value
+}
+
 const getVideoDuration = (blob: Blob): Promise<number> => {
 	return new Promise((resolve) => {
 		const video = document.createElement('video')
@@ -309,7 +495,8 @@ const getVideoDuration = (blob: Blob): Promise<number> => {
 const saving = ref(false)
 
 const saveRecordings = async () => {
-	if (!recordedScreenBlob.value || saving.value) return
+	// Allow saving even if only webcam is available
+	if ((!recordedScreenBlob.value && !recordedWebcamBlob.value) || saving.value) return
 	
 	console.log('💾 Saving recordings...', {
 		hasScreen: !!recordedScreenBlob.value,
@@ -326,8 +513,8 @@ const saveRecordings = async () => {
 	saving.value = true
 	
 	try {
-		// Try to composite videos if FFmpeg is available
-		if (recordedWebcamBlob.value) {
+		// Try to composite videos if FFmpeg is available and both recordings exist
+		if (recordedScreenBlob.value && recordedWebcamBlob.value) {
 			try {
 				console.log('🎬 Attempting to composite screen + webcam into unified video...')
 				
@@ -365,7 +552,8 @@ const saveRecordings = async () => {
 
 				console.log('📥 Adding unified recording to project...')
 				
-				const result = await addClip(currentProject.value.id, finalSrc, {
+				// Start upload in background, navigate immediately
+				addClip(currentProject.value.id, finalSrc, {
 					name: 'Screen Recording (with webcam)',
 					duration: finalDuration,
 					type: 'screen',
@@ -375,13 +563,13 @@ const saveRecordings = async () => {
 						hasWebcam: true,
 						unified: true
 					}
+				}).catch((error) => {
+					console.error('❌ Background upload failed:', error)
+					// Error will be shown in editor via upload state
 				})
 
-				if (result.error) {
-					throw new Error(result.error)
-				}
-
-				console.log('✅ Unified recording saved! Navigating to project...')
+				console.log('✅ Starting upload, navigating to project...')
+				saving.value = false
 				await navigateTo(`/project/${currentProject.value.id}`)
 				return
 			} catch (ffmpegError: any) {
@@ -391,57 +579,68 @@ const saveRecordings = async () => {
 		}
 		
 		// Fallback: Save clips separately (screen and webcam as individual clips)
-		console.log('📥 Saving clips separately...')
+		console.log('📥 Saving clips separately, starting uploads...')
 		
-		// Save screen recording
-		const screenSrc = URL.createObjectURL(recordedScreenBlob.value)
-		const screenDuration = await getVideoDuration(recordedScreenBlob.value)
+		// Get durations first (needed for metadata)
+		const durations = await Promise.all([
+			recordedScreenBlob.value ? getVideoDuration(recordedScreenBlob.value) : Promise.resolve(0),
+			recordedWebcamBlob.value ? getVideoDuration(recordedWebcamBlob.value) : Promise.resolve(0)
+		])
 		
-		const screenResult = await addClip(currentProject.value.id, screenSrc, {
-			name: 'Screen Recording',
-			duration: screenDuration,
-			type: 'screen',
-			fileSize: recordedScreenBlob.value.size,
-			format: 'video/mp4',
-			metadata: {
-				hasWebcam: false,
-				unified: false
-			}
-		})
-
-		if (screenResult.error) {
-			throw new Error(screenResult.error)
+		// Start uploads in background, navigate immediately
+		const uploadPromises = []
+		
+		if (recordedScreenBlob.value) {
+			const screenSrc = URL.createObjectURL(recordedScreenBlob.value)
+			
+			uploadPromises.push(
+				addClip(currentProject.value.id, screenSrc, {
+					name: 'Screen Recording',
+					duration: durations[0],
+					type: 'screen',
+					fileSize: recordedScreenBlob.value.size,
+					format: 'video/mp4',
+					metadata: {
+						hasWebcam: !!recordedWebcamBlob.value,
+						unified: false
+					}
+				}).catch((error) => {
+					console.error('❌ Screen recording upload failed:', error)
+				})
+			)
 		}
 
-		// Save webcam recording if available
 		if (recordedWebcamBlob.value) {
 			const webcamSrc = URL.createObjectURL(recordedWebcamBlob.value)
-			const webcamDuration = await getVideoDuration(recordedWebcamBlob.value)
 			
-			const webcamResult = await addClip(currentProject.value.id, webcamSrc, {
-				name: 'Webcam Recording',
-				duration: webcamDuration,
-				type: 'webcam',
-				fileSize: recordedWebcamBlob.value.size,
-				format: 'video/mp4',
-				metadata: {
-					hasWebcam: true,
-					unified: false
-				}
-			})
-
-			if (webcamResult.error) {
-				throw new Error(webcamResult.error)
-			}
+			uploadPromises.push(
+				addClip(currentProject.value.id, webcamSrc, {
+					name: 'Webcam Recording',
+					duration: durations[1],
+					type: 'webcam',
+					fileSize: recordedWebcamBlob.value.size,
+					format: 'video/mp4',
+					metadata: {
+						hasWebcam: true,
+						unified: false
+					}
+				}).catch((error) => {
+					console.error('❌ Webcam recording upload failed:', error)
+				})
+			)
 		}
 
-		console.log('✅ Clips saved separately! Navigating to project...')
+		console.log('✅ Starting uploads, navigating to project...')
+		saving.value = false
 		await navigateTo(`/project/${currentProject.value.id}`)
 	} catch (error: any) {
-		console.error('❌ Failed to save recordings:', error)
-		alert(`Failed to save: ${error.message}`)
-	} finally {
+		console.error('❌ Failed to start recording upload:', error)
+		// Show error but still navigate - user can see status in editor
 		saving.value = false
+		// Navigate anyway so user can see what happened
+		if (currentProject.value) {
+			await navigateTo(`/project/${currentProject.value.id}`)
+		}
 	}
 }
 
@@ -451,7 +650,10 @@ const handlePlaybackLoaded = (event: Event) => {
 	console.log('✅ Video loaded successfully:', {
 		duration: screenVideo.duration,
 		videoWidth: screenVideo.videoWidth,
-		videoHeight: screenVideo.videoHeight
+		videoHeight: screenVideo.videoHeight,
+		src: screenVideo.src.substring(0, 50) + '...',
+		readyState: screenVideo.readyState,
+		networkState: screenVideo.networkState
 	})
 	
 	if (webcamPlayback.value && screenVideo) {
@@ -477,48 +679,48 @@ const handleVideoError = (event: Event) => {
 	console.error('❌ Video playback error:', {
 		code: videoError?.code,
 		message: videoError?.message,
-		src: video.src
+		src: video.src.substring(0, 100),
+		readyState: video.readyState,
+		networkState: video.networkState,
+		currentSrc: video.currentSrc,
+		isBlob: video.src.startsWith('blob:')
 	})
 	
 	// Log blob info for debugging
+	console.log('📊 Debugging info:')
 	if (recordedScreenBlob.value) {
 		console.log('Screen blob info:', {
 			size: recordedScreenBlob.value.size,
-			type: recordedScreenBlob.value.type
+			type: recordedScreenBlob.value.type,
+			sizeMB: (recordedScreenBlob.value.size / 1024 / 1024).toFixed(2)
 		})
+	} else {
+		console.warn('⚠️ recordedScreenBlob is null')
 	}
+	
+	if (screenBlobUrl.value) {
+		console.log('Screen blob URL exists:', screenBlobUrl.value.substring(0, 50) + '...')
+	} else {
+		console.warn('⚠️ screenBlobUrl is empty')
+	}
+	
 	if (recordedWebcamBlob.value) {
 		console.log('Webcam blob info:', {
 			size: recordedWebcamBlob.value.size,
-			type: recordedWebcamBlob.value.type
+			type: recordedWebcamBlob.value.type,
+			sizeMB: (recordedWebcamBlob.value.size / 1024 / 1024).toFixed(2)
 		})
+	}
+	
+	// Set error message for user
+	if (!error.value) {
+		error.value = `Failed to load video: ${videoError?.message || 'Unknown error'}. Error code: ${videoError?.code || 'unknown'}`
 	}
 }
 
 const discardRecordings = () => {
 	reset()
 	recordingTime.value = '00:00'
-}
-
-// PiP handlers
-const removePip = () => {
-	pipConfig.value = {
-		x: 80,
-		y: 80,
-		width: 20,
-		height: 20,
-		shape: 'circle',
-		borderWidth: 3,
-		borderColor: '#fff',
-		shadow: true
-	}
-}
-
-const updatePipPosition = (x: number, y: number) => {
-	if (pipConfig.value) {
-		pipConfig.value.x = x
-		pipConfig.value.y = y
-	}
 }
 
 const goBack = () => {
@@ -529,7 +731,6 @@ const goBack = () => {
 	}
 }
 
-// Add a button to go to project editor
 const goToProjectEditor = () => {
 	if (currentProject.value) {
 		router.push(`/project/${currentProject.value.id}`)
@@ -593,114 +794,155 @@ onUnmounted(() => {
 .recorder-page {
 	display: flex;
 	flex-direction: column;
-	height: 100vh;
-	max-height: 100vh;
-	background-color: rgb(17 24 39);
-	color: white;
+	height: 100%;
 	overflow: hidden;
 }
 
-.top-bar {
+/* Header */
+.recorder-header {
+	position: fixed;
+	top: 0;
+	left: 0;
+	right: 0;
+	z-index: 100;
+	background: var(--color-background);
+	border-bottom: 1px solid var(--color-border);
+	backdrop-filter: blur(8px);
+}
+
+.header-content {
 	display: flex;
 	align-items: center;
 	gap: 1rem;
-	padding: 0.5rem 1.5rem;
-	background-color: rgb(31 41 55);
-	border-bottom: 1px solid rgb(55 65 81);
-	flex-shrink: 0;
+	padding: 0.75rem 1.5rem;
+	max-width: 100%;
 }
 
-.top-bar h1 {
+.header-title {
 	flex: 1;
 	font-size: 1.125rem;
 	font-weight: 600;
 	margin: 0;
 }
 
-.spacer {
-	width: 80px;
+.header-actions {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
 }
 
-.recorder-content {
+/* Main Preview Container */
+.preview-container {
 	flex: 1;
-	display: grid;
-	grid-template-columns: 1fr 300px;
-	grid-template-rows: minmax(0, 1fr) min-content;
-	gap: 0.75rem;
-	padding: 0.75rem;
-	overflow: hidden;
+	overflow: visible;
+	padding: clamp(0.5rem, 1vh, 1rem);
+	margin-top: 60px;
+	margin-bottom: 100px;
 	min-height: 0;
-	max-height: 100%;
-	height: 100%;
-}
-
-.recording-area {
-	grid-column: 1;
-	grid-row: 1;
-	background-color: rgb(31 41 55);
-	border-radius: 0.5rem;
-	border: 1px solid rgb(55 65 81);
 	display: flex;
-	align-items: center;
-	justify-content: center;
 	flex-direction: column;
-	overflow: hidden;
-	position: relative;
-	min-height: 0;
-	max-height: 100%;
-	height: 100%;
-	padding: 0.75rem;
 }
 
-.start-prompt {
+.preview-wrapper {
+	max-width: 1280px;
+	margin: 0 auto;
+	width: 100%;
+	height: 100%;
+	display: flex;
+	flex-direction: column;
+	justify-content: flex-start;
+	min-height: 0;
+}
+
+/* Ready State */
+.ready-state {
+	display: flex;
+	flex-direction: column;
+	gap: 1.5rem;
+	width: 100%;
+	max-width: 600px;
+	margin: 0 auto;
+}
+
+.empty-state-card {
+	width: 100%;
+}
+
+.empty-state {
 	text-align: center;
-	color: rgb(107 114 128);
-	padding: 0.25rem;
-	max-width: 100%;
+	padding: clamp(1rem, 2vh, 2rem);
+}
+
+.quick-settings-card {
 	width: 100%;
-	box-sizing: border-box;
 }
 
-.start-prompt h2 {
-	margin: 0.25rem 0 0.125rem 0;
-	font-size: 1.125rem;
-	font-weight: 600;
-	color: white;
+.quick-settings {
+	display: flex;
+	flex-direction: column;
+	gap: 1rem;
+	padding: 0.5rem 0;
 }
 
-.start-prompt p {
-	margin: 0.125rem 0;
-	color: rgb(156 163 175);
-	font-size: 0.8125rem;
+.quick-setting-item {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 1rem;
 }
 
-.editor-hint {
-	margin-top: 0.375rem;
-	padding: 0.35rem 0.5rem;
-	background-color: rgba(59, 130, 246, 0.1);
-	border: 1px solid rgba(59, 130, 246, 0.3);
-	border-radius: 0.375rem;
+.quick-setting-info {
+	flex: 1;
+}
+
+.quick-setting-label {
+	display: block;
+	font-size: 0.875rem;
+	font-weight: 500;
+	margin-bottom: 0.25rem;
+}
+
+.quick-setting-desc {
 	font-size: 0.75rem;
+	color: var(--color-muted);
+	margin: 0;
 }
 
-.recording-active {
+.empty-icon {
+	width: 5rem;
+	height: 5rem;
+	margin: 0 auto 1.5rem;
+	color: var(--color-muted);
+}
+
+.empty-title {
+	font-size: 1.5rem;
+	font-weight: 600;
+	margin-bottom: 0.5rem;
+}
+
+.empty-description {
+	color: var(--color-muted);
+	font-size: 0.875rem;
+}
+
+/* Recording States */
+.recording-state {
 	width: 100%;
 	height: 100%;
 	display: flex;
-	flex-direction: column;
 	align-items: center;
 	justify-content: center;
-	gap: 2rem;
-	padding: 2rem;
+}
+
+.recording-card {
+	max-width: 600px;
+	margin: 0 auto;
 }
 
 .native-recording-indicator {
-	display: flex;
-	flex-direction: column;
-	align-items: center;
-	justify-content: center;
-	gap: 1rem;
 	text-align: center;
+	padding: clamp(1rem, 2vh, 2rem);
 }
 
 .pulse-indicator {
@@ -708,7 +950,7 @@ onUnmounted(() => {
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	margin-bottom: 1rem;
+	margin-bottom: 1.5rem;
 }
 
 .pulse-ring {
@@ -718,6 +960,13 @@ onUnmounted(() => {
 	border-radius: 50%;
 	background-color: rgba(239, 68, 68, 0.2);
 	animation: pulse 2s ease-out infinite;
+}
+
+.recording-icon {
+	width: 5rem;
+	height: 5rem;
+	color: rgb(239, 68, 68);
+	z-index: 1;
 }
 
 @keyframes pulse {
@@ -735,14 +984,45 @@ onUnmounted(() => {
 	}
 }
 
+.recording-title {
+	font-size: 1.5rem;
+	font-weight: 600;
+	margin-bottom: 0.5rem;
+}
+
+.recording-subtitle {
+	color: var(--color-muted);
+	margin-bottom: 1rem;
+}
+
+.recording-hint {
+	font-size: 0.75rem;
+	color: var(--color-muted);
+	margin-top: 1rem;
+}
+
+/* Live Preview */
+.live-preview-container {
+	width: 100%;
+	height: 100%;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 1rem;
+}
+
 .preview-pip-container {
 	position: relative;
 	width: 100%;
 	max-width: 1280px;
 	aspect-ratio: 16 / 9;
+	max-height: 100%;
 	background-color: #000;
 	border-radius: 0.5rem;
 	overflow: hidden;
+	box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.4);
+	min-height: 0;
+	flex-shrink: 1;
 }
 
 .preview-video-main {
@@ -769,6 +1049,12 @@ onUnmounted(() => {
 	object-fit: cover;
 }
 
+.recording-overlay-badge {
+	position: absolute;
+	top: 1rem;
+	left: 1rem;
+}
+
 .audio-indicator {
 	position: absolute;
 	bottom: 0.25rem;
@@ -789,182 +1075,213 @@ onUnmounted(() => {
 	font-size: 0.625rem;
 }
 
-.recording-indicator {
+/* Error State */
+.preview-error-state {
+	width: 100%;
+	height: 100%;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	padding: 2rem;
+	text-align: center;
+	background-color: rgba(0, 0, 0, 0.5);
+}
+
+.error-icon {
+	width: 4rem;
+	height: 4rem;
+	color: var(--color-warning);
+	margin-bottom: 1rem;
+}
+
+.error-title {
+	font-size: 1.25rem;
+	font-weight: 600;
+	margin-bottom: 0.5rem;
+	color: var(--color-warning);
+}
+
+.error-message {
+	font-size: 0.875rem;
+	color: var(--color-muted);
+	margin-bottom: 0.5rem;
+}
+
+.error-hint {
+	font-size: 0.75rem;
+	color: var(--color-muted);
+	opacity: 0.8;
+}
+
+/* Playback Area */
+.playback-area {
+	width: 100%;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 1rem;
+	min-height: 0;
+	flex: 1;
+	overflow: visible;
+}
+
+.playback-card {
+	width: 100%;
+	max-width: 1280px;
+	max-height: 100%;
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+	overflow: visible;
+}
+
+.playback-card :deep(.card-body) {
+	overflow: hidden;
+	min-height: 0;
+	flex: 1 1 auto;
+	display: flex;
+	flex-direction: column;
+}
+
+.playback-card :deep(.card-footer) {
+	flex-shrink: 0;
+	margin-top: auto;
+}
+
+.playback-preview {
+	box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.4);
+	border: 2px solid var(--color-primary);
+	min-height: 0;
+	flex: 1 1 0;
+	overflow: hidden;
+	display: flex;
+	flex-direction: column;
+}
+
+/* Fixed Bottom Control Bar */
+.control-bar {
+	position: fixed;
+	bottom: 0;
+	left: 0;
+	right: 0;
+	z-index: 100;
+	background: var(--color-background);
+	border-top: 1px solid var(--color-border);
+	backdrop-filter: blur(8px);
+	padding: clamp(0.75rem, 1.5vh, 1rem) clamp(1rem, 2vh, 1.5rem);
+	flex-shrink: 0;
+}
+
+.control-bar-content {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 1.5rem;
+	max-width: 1280px;
+	margin: 0 auto;
+}
+
+.record-button-container {
+	flex: 1;
+	display: flex;
+	justify-content: center;
+}
+
+.record-button {
+	min-width: 200px;
+	height: 3.5rem;
+	font-size: 1rem;
+	font-weight: 600;
+	transition: all 0.2s;
+}
+
+.record-button.recording-active {
+	animation: recordingPulse 2s ease-in-out infinite;
+}
+
+@keyframes recordingPulse {
+	0%, 100% {
+		box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+	}
+	50% {
+		box-shadow: 0 0 0 10px rgba(239, 68, 68, 0);
+	}
+}
+
+.control-action {
+	min-width: 3rem;
+}
+
+.quick-actions {
 	display: flex;
 	align-items: center;
 	gap: 0.75rem;
-	background-color: rgba(220, 38, 38, 0.2);
-	padding: 0.75rem 1.5rem;
-	border-radius: 0.5rem;
-	border: 1px solid rgb(220, 38, 38);
-	color: white;
-	font-weight: 500;
 }
 
-.recording-dot {
-	width: 12px;
-	height: 12px;
-	background-color: rgb(220, 38, 38);
-	border-radius: 50%;
-	animation: pulse-red 1.5s ease-in-out infinite;
+.recording-badge {
+	font-family: monospace;
+	font-size: 1rem;
 }
 
-@keyframes pulse-red {
+.pulse-dot {
+	animation: pulse-dot 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-dot {
 	0%, 100% {
 		opacity: 1;
 		transform: scale(1);
 	}
 	50% {
 		opacity: 0.6;
-		transform: scale(1.1);
+		transform: scale(1.2);
 	}
 }
 
-.recording-time {
-	font-family: monospace;
-	font-size: 1.125rem;
-}
-
-.preview-video, .playback-video {
-	max-width: 100%;
-	max-height: 100%;
-	width: auto;
-	height: auto;
-	border-radius: 0.5rem;
-}
-
-.playback-area {
-	text-align: center;
-	width: 100%;
-	padding: 2rem;
+.recording-status-display {
 	display: flex;
-	flex-direction: column;
 	align-items: center;
-	gap: 1.5rem;
-}
-
-.playback-area h3 {
-	margin: 0;
-	font-size: 1.5rem;
-	font-weight: 600;
-	color: white;
-}
-
-.preview-note {
-	margin: 0;
-	color: rgb(156 163 175);
-	font-size: 0.875rem;
-}
-
-.playback-preview {
-	box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.4);
-	border: 2px solid rgb(59 130 246);
-}
-
-.recording-actions {
-	display: flex;
-	gap: 1rem;
-	margin-top: 1rem;
-}
-
-.controls-area {
-	grid-column: 1;
-	grid-row: 2;
-	display: flex;
 	justify-content: center;
-	align-items: center;
-	padding: 0.75rem 0;
-	flex-shrink: 0;
-	min-height: fit-content;
 }
 
-.options-area {
-	grid-column: 2;
-	grid-row: 1 / 3;
-	display: flex;
-	flex-direction: column;
-	gap: 1rem;
-	overflow-y: auto;
-	min-height: 0;
+/* Settings */
+.settings-content {
+	padding: 0.25rem 0;
 }
 
-.option-card {
-	background-color: rgb(31 41 55);
-	border-radius: 0.5rem;
-	border: 1px solid rgb(55 65 81);
-	padding: 1rem;
-	flex-shrink: 0;
-}
+/* Responsive */
+@media (max-width: 768px) {
+	.header-content {
+		padding: 0.5rem 1rem;
+	}
 
-.option-card h3 {
-	margin: 0 0 1rem 0;
-	font-size: 1rem;
-	font-weight: 600;
-}
+	.header-title {
+		font-size: 1rem;
+	}
 
-.option-list {
-	display: flex;
-	flex-direction: column;
-	gap: 1rem;
-}
+	.preview-container {
+		padding: 0.5rem;
+		margin-top: 56px;
+		margin-bottom: 90px;
+	}
 
-.option-item {
-	display: flex;
-	flex-direction: column;
-	gap: 0.5rem;
-}
+	.control-bar {
+		padding: 0.75rem 1rem;
+	}
 
-.option-item label {
-	font-size: 0.875rem;
-	font-weight: 500;
-	color: rgb(156 163 175);
-}
+	.control-bar-content {
+		gap: 0.5rem;
+	}
 
-.toggle-label {
-	display: flex;
-	align-items: center;
-	gap: 0.5rem;
-	cursor: pointer;
-	color: white !important;
-}
+	.record-button {
+		min-width: 150px;
+		height: 3rem;
+		font-size: 0.875rem;
+	}
 
-.toggle-checkbox {
-	width: 18px;
-	height: 18px;
-	cursor: pointer;
-}
-
-.option-value {
-	font-size: 0.875rem;
-	color: white;
-	margin: 0.5rem 0;
-}
-
-.option-help {
-	font-size: 0.75rem;
-	color: rgb(107 114 128);
-	margin: 0.25rem 0 0 0;
-}
-
-.error-card {
-	background-color: rgba(153, 27, 27, 0.2);
-	border: 1px solid rgb(153, 27, 27);
-}
-
-.error-text {
-	color: rgb(248, 113, 113);
-	font-size: 0.875rem;
-	margin: 0;
-}
-
-.no-project-warning {
-	margin-top: 1rem;
-	padding: 0.75rem 1rem;
-	background-color: rgba(251, 191, 36, 0.1);
-	border: 1px solid rgba(251, 191, 36, 0.3);
-	border-radius: 0.375rem;
-	color: rgb(251, 191, 36);
-	font-size: 0.875rem;
-	text-align: center;
+	.quick-actions {
+		display: none;
+	}
 }
 </style>
