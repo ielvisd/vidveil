@@ -13,10 +13,9 @@
 			</NuxtLink>
 		</template>
 		<UNavigationMenu
-			:items="pages"
+			:items="navigationItems"
 			variant="link"
 			:ui="{
-				viewportWrapper: 'w-2xl absolute-center-h',
 				list: 'gap-x-1 md:gap-x-3',
 				link: {
 					base: 'text-gray-300 hover:text-pink-500 transition-colors',
@@ -26,7 +25,7 @@
 		/>
 		<template #body>
 			<UNavigationMenu
-				:items="pages"
+				:items="navigationItems"
 				orientation="vertical"
 				variant="link"
 				:ui="{
@@ -39,6 +38,29 @@
 		</template>
 		<template #right>
 			<div class="flex items-center gap-3">
+				<!-- Command Palette Trigger -->
+				<UTooltip text="Search or navigate" :kbds="['meta', 'K']">
+					<UButton
+						icon="i-lucide-search"
+						color="neutral"
+						variant="ghost"
+						size="sm"
+						@click="commandPaletteOpen = true"
+						aria-label="Open command palette"
+					/>
+				</UTooltip>
+
+				<!-- User Menu (when authenticated) -->
+				<UDropdownMenu v-if="isAuthenticated" :items="userMenuItems">
+					<UButton
+						icon="i-lucide-user"
+						color="neutral"
+						variant="ghost"
+						size="sm"
+						aria-label="User menu"
+					/>
+				</UDropdownMenu>
+
 				<!-- Dev Mode Indicator -->
 				<UBadge 
 					v-if="isDev"
@@ -69,11 +91,18 @@
 				</UBadge>
 			</div>
 		</template>
+
+		<!-- Command Palette -->
+		<SiteCommandPalette v-model:open="commandPaletteOpen" />
 	</UHeader>
 </template>
 
 <script lang="ts" setup>
-	const { pages } = usePages();
+	const { navigationItems } = useNavigation()
+	const { isAuthenticated, user, signOut } = useAuth()
+	
+	// CommandPalette state
+	const commandPaletteOpen = ref(false)
 	
 	// Dev mode detection
 	const isDev = computed(() => import.meta.dev)
@@ -96,4 +125,24 @@
 			}
 		}
 	})
+
+	// User menu items
+	const userMenuItems = computed(() => [
+		[
+			{
+				label: user.value?.email || 'Account',
+				icon: 'i-lucide-user',
+				disabled: true
+			}
+		],
+		[
+			{
+				label: 'Sign Out',
+				icon: 'i-lucide-log-out',
+				onClick: async () => {
+					await signOut()
+				}
+			}
+		]
+	])
 </script>

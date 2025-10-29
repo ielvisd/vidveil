@@ -545,9 +545,15 @@ const selectClip = (clip: any) => {
 		webcamClip.value = clip
 		setWebcamClip(clip.id)
 		
-		// If no PiP shape yet, apply default circle
+		// If no PiP shape yet, apply default circle with smart positioning
 		if (!pipConfig.value) {
-			applyPipShape('circle', clip.id)
+			nextTick(async () => {
+				if (videoPlayer.value && videoPlayer.value.readyState >= 2) {
+					await applyPipShape('circle', clip.id, videoPlayer.value)
+				} else {
+					await applyPipShape('circle', clip.id)
+				}
+			})
 		}
 	} else {
 		// Set as main video
@@ -830,7 +836,14 @@ onMounted(async () => {
 			if (webcam) {
 				webcamClip.value = webcam
 				setWebcamClip(webcam.id)
-				applyPipShape('circle', webcam.id)
+				// Wait for video element to be ready before applying smart positioning
+				nextTick(async () => {
+					if (videoPlayer.value && videoPlayer.value.readyState >= 2) {
+						await applyPipShape('circle', webcam.id, videoPlayer.value)
+					} else {
+						applyPipShape('circle', webcam.id)
+					}
+				})
 				console.log('📷 Webcam PiP setup:', webcam.name)
 			}
 			
@@ -1096,12 +1109,21 @@ const startRecording = () => {
 	navigateTo(`/recorder?project=${projectId}`)
 }
 
-const applyShape = (shape: string) => {
+const applyShape = async (shape: string) => {
+	const videoEl = videoPlayer.value
 	if (selectedClip.value) {
-		applyPipShape(shape as any, selectedClip.value.id)
+		if (videoEl && videoEl.readyState >= 2) {
+			await applyPipShape(shape as any, selectedClip.value.id, videoEl)
+		} else {
+			await applyPipShape(shape as any, selectedClip.value.id)
+		}
 	} else {
 		// Apply to active video if no clip selected
-		applyPipShape(shape as any)
+		if (videoEl && videoEl.readyState >= 2) {
+			await applyPipShape(shape as any, undefined, videoEl)
+		} else {
+			await applyPipShape(shape as any)
+		}
 	}
 }
 

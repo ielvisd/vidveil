@@ -1,3 +1,7 @@
+/**
+ * @deprecated This composable is deprecated. Use `useNavigation()` instead for user-facing navigation.
+ * This was used for auto-discovering routes, which exposed technical routes that users shouldn't see.
+ */
 export const usePages = () => {
 	const router = useRouter();
 	const { pageCategories } = useAppConfig();

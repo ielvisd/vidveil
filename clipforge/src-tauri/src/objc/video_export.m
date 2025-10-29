@@ -23,6 +23,12 @@ AVMutableComposition* create_composition_from_clips(
     float pip_size_percent,
     const char* pip_shape_svg
 ) {
+    // Suppress unused parameter warnings - these are kept for API consistency
+    (void)pip_x_percent;
+    (void)pip_y_percent;
+    (void)pip_size_percent;
+    (void)pip_shape_svg;
+    
     @autoreleasepool {
         // Create composition
         AVMutableComposition* composition = [AVMutableComposition composition];
@@ -210,6 +216,9 @@ ExportResult export_video_native_objc(
     result.progress = 0.0;
     memset(result.current_step, 0, sizeof(result.current_step));
     memset(result.error_message, 0, sizeof(result.error_message));
+    
+    // Suppress unused parameter warning - resolution is kept for API consistency
+    (void)resolution;
     
     @autoreleasepool {
         @try {

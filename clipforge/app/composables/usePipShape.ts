@@ -1,5 +1,6 @@
-import { ref, computed } from 'vue'
+import { ref, computed, nextTick } from 'vue'
 import type { PredefinedShape } from '~/utils/shapes'
+import { suggestPiPPosition, getRecommendedPipSize } from '~/utils/positioning'
 
 export interface PipShapeConfig {
 	shape: PredefinedShape
@@ -20,25 +21,54 @@ export const usePipShape = () => {
 	const webcamClipId = ref<string | null>(null)
 	const isActive = computed(() => pipConfig.value !== null)
 
-	const applyShape = (shape: PredefinedShape, clipId?: string) => {
-		// Default position: bottom-right corner with proper pixel coordinates
-		// Note: These will be adjusted based on actual container size in the component
+	const applyShape = async (shape: PredefinedShape, clipId?: string, videoElement?: HTMLVideoElement) => {
+		if (clipId) {
+			webcamClipId.value = clipId
+		}
+
+		// Determine PiP size - use recommended size if video element available
+		let pipWidth = 200
+		let pipHeight = 200
+		
+		if (videoElement && videoElement.videoWidth && videoElement.videoHeight) {
+			const recommendedSize = getRecommendedPipSize(videoElement.videoWidth, videoElement.videoHeight)
+			pipWidth = recommendedSize.width
+			pipHeight = recommendedSize.height
+		}
+
+		// Auto-position PiP using smart positioning
+		let x = window.innerWidth - pipWidth - 50 // Default bottom-right
+		let y = window.innerHeight - pipHeight - 50
+
+		if (videoElement && videoElement.readyState >= 2) {
+			try {
+				// Use lightweight mode for faster analysis (500ms timeout)
+				const suggestedPosition = await suggestPiPPosition(
+					videoElement, 
+					{ width: pipWidth, height: pipHeight },
+					{ lightweight: true, timeout: 500 }
+				)
+				x = suggestedPosition.x
+				y = suggestedPosition.y
+				console.log('✅ Smart PiP positioning applied:', { x, y })
+			} catch (error) {
+				console.warn('⚠️ Smart positioning failed, using default position:', error)
+				// Fallback to bottom-right corner
+			}
+		}
+
 		globalPipConfig.value = {
 			shape,
-			width: 200, // Fixed pixel width
-			height: 200, // Fixed pixel height
-			x: window.innerWidth - 500, // Start near right edge (will be constrained by container)
-			y: window.innerHeight - 600, // Start near bottom (will be constrained by container)
+			width: pipWidth,
+			height: pipHeight,
+			x,
+			y,
 			borderColor: '#ffffff',
 			borderWidth: 3,
 			shadow: true
 		}
 
-		if (clipId) {
-			webcamClipId.value = clipId
-		}
-
-		console.log('Applied PiP shape:', shape, 'to webcam clip:', clipId)
+		console.log('Applied PiP shape:', shape, 'to webcam clip:', clipId, 'at position:', { x, y })
 	}
 
 	const setWebcamClip = (clipId: string) => {
