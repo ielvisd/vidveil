@@ -15,8 +15,8 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 PROJECT_DIR="$SCRIPT_DIR"
 BUILD_OUTPUT="$PROJECT_DIR/src-tauri/target/release/bundle/macos/VidVeil.app"
 
-# Target folder - default to ~/Applications, or use provided argument
-TARGET_FOLDER="${1:-$HOME/Applications}"
+# Target folder - default to /Applications, or use provided argument
+TARGET_FOLDER="${1:-/Applications}"
 
 echo -e "${GREEN}🚀 Building VidVeil desktop app...${NC}"
 cd "$PROJECT_DIR"
@@ -32,17 +32,24 @@ fi
 echo -e "${GREEN}✅ Build complete!${NC}"
 echo -e "${YELLOW}📦 Copying to $TARGET_FOLDER...${NC}"
 
+# Check if we need sudo for system Applications folder
+if [ "$TARGET_FOLDER" = "/Applications" ]; then
+    SUDO_CMD="sudo"
+else
+    SUDO_CMD=""
+fi
+
 # Create target folder if it doesn't exist
-mkdir -p "$TARGET_FOLDER"
+$SUDO_CMD mkdir -p "$TARGET_FOLDER"
 
 # Remove old version if it exists
 if [ -d "$TARGET_FOLDER/VidVeil.app" ]; then
     echo -e "${YELLOW}🗑️  Removing old version...${NC}"
-    rm -rf "$TARGET_FOLDER/VidVeil.app"
+    $SUDO_CMD rm -rf "$TARGET_FOLDER/VidVeil.app"
 fi
 
 # Copy the new app
-cp -R "$BUILD_OUTPUT" "$TARGET_FOLDER/VidVeil.app"
+$SUDO_CMD cp -R "$BUILD_OUTPUT" "$TARGET_FOLDER/VidVeil.app"
 
 echo -e "${GREEN}✅ App copied to $TARGET_FOLDER/VidVeil.app${NC}"
 echo -e "${GREEN}🚀 Launching VidVeil...${NC}"

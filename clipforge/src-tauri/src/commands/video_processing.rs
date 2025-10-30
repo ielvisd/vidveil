@@ -30,7 +30,8 @@ extern "C" {
         resolution: *const c_char,
         pip_x_percent: c_float,
         pip_y_percent: c_float,
-        pip_size_percent: c_float,
+        pip_width_percent: c_float,
+        pip_height_percent: c_float,
         pip_shape_svg: *const c_char,
     ) -> ExportResult;
     
@@ -333,19 +334,20 @@ pub async fn export_video_native(
         println!("📁 Absolute output path: {}", absolute_output_path);
         
         // Get PiP configuration
-        let (pip_x, pip_y, pip_size, pip_shape) = if let Some(webcam_clip) = webcam_clip {
+        let (pip_x, pip_y, pip_width, pip_height, pip_shape) = if let Some(webcam_clip) = webcam_clip {
             if let Some(pip_config) = &webcam_clip.pip_config {
                 (
                     pip_config.x as f32,
                     pip_config.y as f32,
                     pip_config.width as f32,
+                    pip_config.height as f32,
                     string_to_c_string(&pip_config.shape)
                 )
             } else {
-                (0.8, 0.8, 0.2, string_to_c_string("rectangle"))
+                (0.8, 0.8, 0.2, 0.2, string_to_c_string("rectangle"))
             }
         } else {
-            (0.0, 0.0, 0.0, string_to_c_string("rectangle"))
+            (0.0, 0.0, 0.0, 0.0, string_to_c_string("rectangle"))
         };
 
         // Call native Objective-C function
@@ -359,7 +361,8 @@ pub async fn export_video_native(
                 resolution_c.as_ptr(),
                 pip_x,
                 pip_y,
-                pip_size,
+                pip_width,
+                pip_height,
                 pip_shape.as_ptr(),
             )
         };
