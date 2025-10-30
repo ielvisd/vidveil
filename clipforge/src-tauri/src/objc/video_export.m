@@ -448,14 +448,13 @@ AVMutableVideoComposition* create_pip_composition(
             
             // Calculate PiP dimensions and normalized position in render size coordinates
             // Percentages come from web UI (top-left origin). Convert to render space (bottom-left origin).
-            float pipWidth = renderSize.width * pip_width_percent;
-            float pipHeight = renderSize.height * pip_height_percent;
             float pipXPercentClamped = MAX(0.0f, MIN(1.0f, pip_x_percent));
             float pipYPercentClamped = MAX(0.0f, MIN(1.0f, pip_y_percent));
-            float pipXFromLeft = renderSize.width * pipXPercentClamped;
-            float pipYFromTop = renderSize.height * pipYPercentClamped;
+            float pipWidthPercentClamped = MAX(0.0f, MIN(1.0f, pip_width_percent));
+            float pipHeightPercentClamped = MAX(0.0f, MIN(1.0f, pip_height_percent));
             
             // Get webcam track size for scaling from the first segment's source track
+            // CRITICAL: Get webcam size FIRST so we can use its aspect ratio to derive height if needed
             CGSize webcamSize = renderSize; // Default fallback
             if (webcamTrack.segments.count > 0) {
                 AVCompositionTrackSegment* firstWebcamSegment = webcamTrack.segments.firstObject;
@@ -483,6 +482,32 @@ AVMutableVideoComposition* create_pip_composition(
                     }
                 }
             }
+            
+            // CRITICAL: If height is invalid (0 or negative), derive it from width using webcam's aspect ratio
+            // This prevents the PiP overlay from being invisible
+            if (pipHeightPercentClamped <= 0.0f || isnan(pipHeightPercentClamped) || isinf(pipHeightPercentClamped)) {
+                // If width is also invalid, use default size
+                if (pipWidthPercentClamped <= 0.0f || isnan(pipWidthPercentClamped) || isinf(pipWidthPercentClamped)) {
+                    pipWidthPercentClamped = 0.2f; // Default 20% width
+                }
+                // Derive height from width using webcam's actual aspect ratio
+                if (webcamSize.width > 0 && webcamSize.height > 0) {
+                    CGFloat webcamAspectRatio = webcamSize.height / webcamSize.width;
+                    pipHeightPercentClamped = pipWidthPercentClamped * webcamAspectRatio;
+                    NSLog(@"⚠️ PiP height was invalid (%.4f) - deriving from width using webcam aspect ratio %.2f: %.4f", 
+                        pip_height_percent, webcamAspectRatio, pipHeightPercentClamped);
+                } else {
+                    // Fallback to 16:9 if webcam size is unknown
+                    pipHeightPercentClamped = pipWidthPercentClamped * (9.0f / 16.0f);
+                    NSLog(@"⚠️ PiP height was invalid (%.4f) - deriving from width assuming 16:9 aspect ratio: %.4f", 
+                        pip_height_percent, pipHeightPercentClamped);
+                }
+            }
+            
+            float pipWidth = renderSize.width * pipWidthPercentClamped;
+            float pipHeight = renderSize.height * pipHeightPercentClamped;
+            float pipXFromLeft = renderSize.width * pipXPercentClamped;
+            float pipYFromTop = renderSize.height * pipYPercentClamped;
             
             // Calculate scale to fit PiP size while preserving aspect ratio
             // Use the smaller scale factor to ensure the webcam fits within the PiP bounds
@@ -761,7 +786,12 @@ AVMutableVideoComposition* create_pip_composition(
             }
         }
         
-        instruction.layerInstructions = layerInstructions;
+        // Ensure webcam (PiP) renders on top: if both layers exist, put webcam first (top), screen second (bottom)
+        if (layerInstructions.count == 2) {
+            instruction.layerInstructions = @[layerInstructions[1], layerInstructions[0]];
+        } else {
+            instruction.layerInstructions = layerInstructions;
+        }
         videoComposition.instructions = @[instruction];
         
         NSLog(@"✅ Video composition created with PiP");
