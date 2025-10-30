@@ -49,13 +49,16 @@ CGSize get_resolution_size(const char* resolution) {
         return CGSizeMake(1920, 1080);
     } else if ([resStr isEqualToString:@"720p"]) {
         return CGSizeMake(1280, 720);
-    } else if ([resStr isEqualToString:@"480p"]) {
+    } else if ([resStr isEqualToString:@"480p"] || [resStr isEqualToString:@"420p"]) {
+        // Map 420p to 480p (420p is not a standard resolution, user likely meant 480p)
         return CGSizeMake(854, 480);
     } else if ([resStr isEqualToString:@"360p"]) {
         return CGSizeMake(640, 360);
     } else if ([resStr isEqualToString:@"source"]) {
         return CGSizeZero; // Indicates preserve source resolution
     }
+    // Log warning for unsupported resolution
+    NSLog(@"⚠️ Unsupported resolution: %@, defaulting to 1080p", resStr);
     // Default to 1080p
     return CGSizeMake(1920, 1080);
 }
@@ -444,6 +447,10 @@ ExportResult export_video_native_objc(
             
             // Get target resolution and bitrate settings
             CGSize targetResolution = get_resolution_size(resolution);
+            
+            // Log resolution (helpful for debugging)
+            NSString* resolutionStr = [NSString stringWithUTF8String:resolution];
+            NSLog(@"📏 Export resolution: %@", resolutionStr);
             NSInteger videoBitrate = get_video_bitrate(quality);
             NSInteger audioBitrate = get_audio_bitrate(quality);
             NSString* exportPreset = get_export_preset(quality, NULL);
@@ -476,9 +483,30 @@ ExportResult export_video_native_objc(
             NSArray<AVMutableCompositionTrack*>* videoTracks = [composition tracksWithMediaType:AVMediaTypeVideo];
             CGSize sourceSize = CGSizeZero;
             if (videoTracks.count > 0) {
-                AVAssetTrack* sourceTrack = [[videoTracks[0].asset tracksWithMediaType:AVMediaTypeVideo] firstObject];
-                if (sourceTrack) {
-                    sourceSize = sourceTrack.naturalSize;
+                AVMutableCompositionTrack* compositionTrack = videoTracks[0];
+                
+                // Get source size from the first segment (same method as create_pip_composition)
+                if (compositionTrack.segments.count > 0) {
+                    AVCompositionTrackSegment* firstSegment = compositionTrack.segments.firstObject;
+                    if (firstSegment != nil && firstSegment.sourceURL != nil) {
+                        NSURL* sourceURL = firstSegment.sourceURL;
+                        CMPersistentTrackID sourceTrackID = firstSegment.sourceTrackID;
+                        
+                        AVAsset* sourceAsset = [AVAsset assetWithURL:sourceURL];
+                        if (sourceAsset != nil) {
+                            AVAssetTrack* sourceTrack = [sourceAsset trackWithTrackID:sourceTrackID];
+                            if (sourceTrack == nil) {
+                                // Fallback: get first video track
+                                NSArray<AVAssetTrack*>* sourceVideoTracks = [sourceAsset tracksWithMediaType:AVMediaTypeVideo];
+                                sourceTrack = sourceVideoTracks.firstObject;
+                            }
+                            
+                            if (sourceTrack != nil) {
+                                sourceSize = sourceTrack.naturalSize;
+                                NSLog(@"📺 Source video size: %.0fx%.0f", sourceSize.width, sourceSize.height);
+                            }
+                        }
+                    }
                 }
             }
             
@@ -672,6 +700,16 @@ ExportResult export_video_native_objc(
             // Wait for completion
             dispatch_semaphore_wait(semaphore, DISPATCH_TIME_FOREVER);
             
+            // Check final export status (may have changed after waiting)
+            AVAssetExportSessionStatus finalStatus = exportSession.status;
+            NSLog(@"🔄 Final export session status: %ld", (long)finalStatus);
+            
+            // Re-check export success based on final status
+            exportSuccess = (finalStatus == AVAssetExportSessionStatusCompleted);
+            if (!exportSuccess && exportError == nil) {
+                exportError = exportSession.error;
+            }
+            
             if (exportSuccess) {
                 // Validate output file was created and has reasonable size
                 NSString* outputPath = [NSString stringWithUTF8String:output_path];
@@ -689,17 +727,33 @@ ExportResult export_video_native_objc(
                 NSNumber* fileSize = fileAttributes[NSFileSize];
                 unsigned long long sizeBytes = [fileSize unsignedLongLongValue];
                 
+                NSLog(@"📊 Exported file size: %llu bytes (%.2f KB)", sizeBytes, sizeBytes / 1024.0);
+                
+                // Log composition duration for reference
+                NSLog(@"📊 Composition duration: %.2f seconds", CMTimeGetSeconds(composition.duration));
+                
                 // Minimum file size check: any valid video should be > 100KB
                 const unsigned long long MIN_FILE_SIZE = 100 * 1024; // 100KB
                 
                 if (sizeBytes < MIN_FILE_SIZE) {
                     NSString* sizeStr = [NSByteCountFormatter stringFromByteCount:sizeBytes countStyle:NSByteCountFormatterCountStyleFile];
-                    NSString* errorMsg = [NSString stringWithFormat:@"Exported file is suspiciously small (%@). Export may have failed.", sizeStr];
+                    NSString* errorMsg = [NSString stringWithFormat:@"Exported file is suspiciously small (%@). Export may have failed. Composition duration: %.2fs", sizeStr, CMTimeGetSeconds(composition.duration)];
                     strncpy(result.error_message, [errorMsg UTF8String], sizeof(result.error_message) - 1);
                     result.error_message[sizeof(result.error_message) - 1] = '\0';
                     
                     NSLog(@"❌ Export file too small: %@ (%.2f KB) - minimum expected: %.2f KB", 
                         outputPath, sizeBytes / 1024.0, MIN_FILE_SIZE / 1024.0);
+                    NSLog(@"❌ Composition has duration: %.2fs - file size should be much larger", CMTimeGetSeconds(composition.duration));
+                    
+                    // Additional diagnostics
+                    NSLog(@"📊 Export session preset: %@", exportSession.presetName);
+                    NSLog(@"📊 Export session outputFileType: %@", exportSession.outputFileType);
+                    if (exportSession.videoComposition) {
+                        NSLog(@"📊 Video composition renderSize: %.0fx%.0f", 
+                            exportSession.videoComposition.renderSize.width, 
+                            exportSession.videoComposition.renderSize.height);
+                    }
+                    
                     result.success = false;
                     return result;
                 }

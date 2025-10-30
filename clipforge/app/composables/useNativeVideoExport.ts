@@ -301,6 +301,21 @@ export const useNativeVideoExport = () => {
         throw new Error('No screen recording found in clips. Export requires at least one screen recording.')
       }
       
+      // Validate resolution
+      const supportedResolutions = ['1080p', '720p', '480p', '360p', 'source']
+      if (!supportedResolutions.includes(settings.resolution)) {
+        // Map 420p to 480p as they're close (420p doesn't exist as standard, user likely meant 480p)
+        if (settings.resolution === '420p') {
+          console.warn('⚠️ Resolution "420p" is not supported. Using "480p" instead.')
+          settings.resolution = '480p'
+        } else {
+          throw new Error(
+            `Unsupported resolution: "${settings.resolution}". ` +
+            `Supported resolutions are: ${supportedResolutions.join(', ')}`
+          )
+        }
+      }
+      
       // Prepare export settings
       const exportSettings: ExportSettings = {
         resolution: settings.resolution,

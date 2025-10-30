@@ -1,4 +1,4 @@
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import type { Clip, ExportSettings } from '../../types/project'
 import { useFFmpeg } from './useFFmpeg'
 import { planVideoComposition, executeCompositionPlan, createPipComposition, generateShapeSVG } from '~/utils/video-compositor'
@@ -16,8 +16,16 @@ export const useExport = () => {
 		switch (res) {
 			case '1080p': return { width: 1920, height: 1080 }
 			case '720p': return { width: 1280, height: 720 }
-			case '480p': return { width: 854, height: 480 }
-			default: return { width: 1920, height: 1080 }
+			case '480p':
+			case '420p': // Map 420p to 480p (420p is not a standard resolution)
+				return { width: 854, height: 480 }
+			case '360p': return { width: 640, height: 360 }
+			case 'source': 
+				// Source quality - will be handled by video compositor to preserve original
+				return { width: 0, height: 0 }
+			default: 
+				console.warn(`⚠️ Unsupported resolution: "${res}", defaulting to 1080p`)
+				return { width: 1920, height: 1080 }
 		}
 	}
 
@@ -46,6 +54,23 @@ export const useExport = () => {
 		totalSteps.value = 0
 
 		try {
+			// Validate resolution
+			const supportedResolutions = ['1080p', '720p', '480p', '360p', 'source']
+			let validatedResolution = settings.resolution
+			
+			if (!supportedResolutions.includes(settings.resolution)) {
+				// Map 420p to 480p as they're close (420p doesn't exist as standard, user likely meant 480p)
+				if (settings.resolution === '420p') {
+					console.warn('⚠️ Resolution "420p" is not supported. Using "480p" instead.')
+					validatedResolution = '480p'
+				} else {
+					throw new Error(
+						`Unsupported resolution: "${settings.resolution}". ` +
+						`Supported resolutions are: ${supportedResolutions.join(', ')}`
+					)
+				}
+			}
+			
 			// Sort clips by timeline order before exporting
 			const orderedClips = [...clips].sort((a, b) => {
 				const aOrder = a.metadata?.order ?? a.start_time ?? 0
@@ -92,7 +117,7 @@ export const useExport = () => {
 
 			// Plan the composition workflow
 			const exportSettings: ExportSettings = {
-				resolution: settings.resolution,
+				resolution: validatedResolution,
 				quality: settings.quality,
 				format: settings.format,
 				preset: 'medium'
