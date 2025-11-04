@@ -376,81 +376,235 @@ AVMutableVideoComposition* create_pip_composition(
         videoComposition.frameDuration = CMTimeMake(1, 30); // 30 fps
         videoComposition.renderSize = renderSize;
         
+        // Create instruction
+        AVMutableVideoCompositionInstruction* instruction = [AVMutableVideoCompositionInstruction videoCompositionInstruction];
+        instruction.timeRange = CMTimeRangeMake(kCMTimeZero, composition.duration);
         
-        // Calculate screen transform for CoreAnimation layer
-        CGAffineTransform screenTransform = (scaleX != 1.0 || scaleY != 1.0) ? CGAffineTransformMakeScale(scaleX, scaleY) : CGAffineTransformIdentity;
+        NSLog(@"📋 Video composition instruction timeRange: %.2f - %.2f seconds", 
+            CMTimeGetSeconds(instruction.timeRange.start),
+            CMTimeGetSeconds(CMTimeRangeGetEnd(instruction.timeRange)));
+        
+        NSMutableArray* layerInstructions = [NSMutableArray array];
+        
+        // Screen layer (background) - apply scale if resolution changed
+        AVMutableVideoCompositionLayerInstruction* screenLayerInstruction = 
+            [AVMutableVideoCompositionLayerInstruction videoCompositionLayerInstructionWithAssetTrack:screenTrack];
+        
+        // Scale screen track to target resolution if needed
+        if (scaleX != 1.0 || scaleY != 1.0) {
+            CGAffineTransform screenTransform = CGAffineTransformMakeScale(scaleX, scaleY);
+            // Set transform at multiple points to ensure it's applied throughout
+            CMTime screenDuration = composition.duration;
+            [screenLayerInstruction setTransform:screenTransform atTime:kCMTimeZero];
+            if (CMTimeCompare(screenDuration, kCMTimeZero) > 0) {
+                [screenLayerInstruction setTransform:screenTransform atTime:screenDuration];
+            }
+        }
+        
+        // Ensure screen layer opacity is fully opaque
+        CMTime screenDuration = composition.duration;
+        [screenLayerInstruction setOpacity:1.0 atTime:kCMTimeZero];
+        if (CMTimeCompare(screenDuration, kCMTimeZero) > 0) {
+            [screenLayerInstruction setOpacity:1.0 atTime:screenDuration];
+        }
+        
+        [layerInstructions addObject:screenLayerInstruction];
         NSLog(@"✅ Screen layer instruction added (trackID: %d, transform: scale %.3fx, %.3fy)", 
             (int)screenTrack.trackID, scaleX, scaleY);
         
-        // Prepare PiP variables for CoreAnimation layer (if webcam available)
-        BOOL hasWebcam = (webcamTrack != nil && webcamTrack.segments.count > 0);
-        CGAffineTransform pipTransform = CGAffineTransformIdentity;
-        CGFloat finalPipWidth = 0, finalPipHeight = 0, pipXFromLeft = 0, pipYFromTop = 0;
-        CGSize webcamSize = renderSize; // Default fallback
-
-        if (hasWebcam) {
+        // Webcam layer (PiP) if available
+        if (webcamTrack != nil && webcamTrack.segments.count > 0) {
+            // Debug: Verify webcam track properties
+            NSLog(@"🔍 Webcam track validation:");
+            NSLog(@"   trackID: %d", (int)webcamTrack.trackID);
+            NSLog(@"   segments count: %lu", (unsigned long)webcamTrack.segments.count);
+            NSLog(@"   timeRange: %f - %f seconds", 
+                CMTimeGetSeconds(webcamTrack.timeRange.start),
+                CMTimeGetSeconds(CMTimeRangeGetEnd(webcamTrack.timeRange)));
+            NSLog(@"   enabled: %@", webcamTrack.enabled ? @"YES" : @"NO");
+            
+            AVCompositionTrackSegment* firstSegment = webcamTrack.segments.firstObject;
+            NSLog(@"   First segment sourceURL: %@", firstSegment.sourceURL);
+            NSLog(@"   First segment sourceTrackID: %d", (int)firstSegment.sourceTrackID);
+            NSLog(@"   First segment isEmpty: %@", firstSegment.isEmpty ? @"YES" : @"NO");
+            // Note: AVCompositionTrackSegment doesn't expose timeRange directly
+            // Time range information is available through the track's timeRange property
+            
+            // Create layer instruction for webcam track
+            // CRITICAL: Must use the track's trackID to ensure proper association
+            AVMutableVideoCompositionLayerInstruction* webcamLayerInstruction = 
+                [AVMutableVideoCompositionLayerInstruction videoCompositionLayerInstructionWithAssetTrack:webcamTrack];
+            
+            // Verify the layer instruction is correctly associated with the webcam track
+            CMPersistentTrackID webcamTrackID = webcamTrack.trackID;
+            CMPersistentTrackID layerInstructionTrackID = webcamLayerInstruction.trackID;
+            
+            if (layerInstructionTrackID != webcamTrackID) {
+                NSLog(@"❌ ERROR: Layer instruction trackID (%d) doesn't match webcam trackID (%d)!", 
+                    (int)layerInstructionTrackID, (int)webcamTrackID);
+            } else {
+                NSLog(@"✅ Layer instruction trackID matches webcam trackID: %d", (int)webcamTrackID);
+            }
+            
             // Calculate PiP dimensions and normalized position in render size coordinates
+            // Percentages come from web UI (top-left origin). Convert to render space (bottom-left origin).
             float pipXPercentClamped = MAX(0.0f, MIN(1.0f, pip_x_percent));
             float pipYPercentClamped = MAX(0.0f, MIN(1.0f, pip_y_percent));
             float pipWidthPercentClamped = MAX(0.0f, MIN(1.0f, pip_width_percent));
             float pipHeightPercentClamped = MAX(0.0f, MIN(1.0f, pip_height_percent));
-
-            // Get webcam track size for scaling
+            
+            // Get webcam track size for scaling from the first segment's source track
+            // CRITICAL: Get webcam size FIRST so we can use its aspect ratio to derive height if needed
+            CGSize webcamSize = renderSize; // Default fallback
             if (webcamTrack.segments.count > 0) {
                 AVCompositionTrackSegment* firstWebcamSegment = webcamTrack.segments.firstObject;
                 if (firstWebcamSegment != nil && firstWebcamSegment.sourceURL != nil) {
-                    AVAsset* webcamSourceAsset = [AVAsset assetWithURL:firstWebcamSegment.sourceURL];
+                    NSURL* webcamSourceURL = firstWebcamSegment.sourceURL;
+                    CMPersistentTrackID webcamTrackID = firstWebcamSegment.sourceTrackID;
+                    
+                    AVAsset* webcamSourceAsset = [AVAsset assetWithURL:webcamSourceURL];
                     if (webcamSourceAsset != nil) {
-                        AVAssetTrack* webcamVideoTrack = [webcamSourceAsset trackWithTrackID:firstWebcamSegment.sourceTrackID];
+                        AVAssetTrack* webcamVideoTrack = [webcamSourceAsset trackWithTrackID:webcamTrackID];
                         if (webcamVideoTrack == nil) {
+                            // Fallback: get first video track
                             NSArray<AVAssetTrack*>* webcamVideoTracks = [webcamSourceAsset tracksWithMediaType:AVMediaTypeVideo];
                             webcamVideoTrack = webcamVideoTracks.firstObject;
                         }
+                        
                         if (webcamVideoTrack != nil) {
                             webcamSize = webcamVideoTrack.naturalSize;
+                            CGAffineTransform preferredTransform = webcamVideoTrack.preferredTransform;
+                            NSLog(@"📹 Webcam source size: %.0fx%.0f", webcamSize.width, webcamSize.height);
+                            NSLog(@"📹 Webcam preferred transform: [%.4f, %.4f, %.4f; %.4f, %.4f, %.4f]", 
+                                preferredTransform.a, preferredTransform.b, preferredTransform.tx,
+                                preferredTransform.c, preferredTransform.d, preferredTransform.ty);
                         }
                     }
                 }
             }
             
-            // Derive height from width if invalid
+            // CRITICAL: If height is invalid (0 or negative), derive it from width using webcam's aspect ratio
+            // This prevents the PiP overlay from being invisible
             if (pipHeightPercentClamped <= 0.0f || isnan(pipHeightPercentClamped) || isinf(pipHeightPercentClamped)) {
+                // If width is also invalid, use default size
                 if (pipWidthPercentClamped <= 0.0f || isnan(pipWidthPercentClamped) || isinf(pipWidthPercentClamped)) {
-                    pipWidthPercentClamped = 0.2f;
+                    pipWidthPercentClamped = 0.2f; // Default 20% width
                 }
+                // Derive height from width using webcam's actual aspect ratio
                 if (webcamSize.width > 0 && webcamSize.height > 0) {
-                    pipHeightPercentClamped = pipWidthPercentClamped * (webcamSize.height / webcamSize.width);
+                    CGFloat webcamAspectRatio = webcamSize.height / webcamSize.width;
+                    pipHeightPercentClamped = pipWidthPercentClamped * webcamAspectRatio;
+                    NSLog(@"⚠️ PiP height was invalid (%.4f) - deriving from width using webcam aspect ratio %.2f: %.4f", 
+                        pip_height_percent, webcamAspectRatio, pipHeightPercentClamped);
                 } else {
+                    // Fallback to 16:9 if webcam size is unknown
                     pipHeightPercentClamped = pipWidthPercentClamped * (9.0f / 16.0f);
+                    NSLog(@"⚠️ PiP height was invalid (%.4f) - deriving from width assuming 16:9 aspect ratio: %.4f", 
+                        pip_height_percent, pipHeightPercentClamped);
                 }
             }
             
-            // Calculate final dimensions and position
             float pipWidth = renderSize.width * pipWidthPercentClamped;
             float pipHeight = renderSize.height * pipHeightPercentClamped;
-            pipXFromLeft = renderSize.width * pipXPercentClamped;
-            pipYFromTop = renderSize.height * pipYPercentClamped;
-
-            CGFloat uniformScale = MIN(pipWidth / webcamSize.width, pipHeight / webcamSize.height);
-            finalPipWidth = webcamSize.width * uniformScale;
-            finalPipHeight = webcamSize.height * uniformScale;
-
-            // Ensure minimum size
-            if (finalPipWidth < 120 || finalPipHeight < 120) {
-                uniformScale = MAX(uniformScale, MAX(120.0 / webcamSize.width, 120.0 / webcamSize.height));
+            float pipXFromLeft = renderSize.width * pipXPercentClamped;
+            float pipYFromTop = renderSize.height * pipYPercentClamped;
+            
+            // Calculate scale to fit PiP size while preserving aspect ratio
+            // Use the smaller scale factor to ensure the webcam fits within the PiP bounds
+            CGFloat pipScaleX = pipWidth / webcamSize.width;
+            CGFloat pipScaleY = pipHeight / webcamSize.height;
+            
+            // Use uniform scale to preserve aspect ratio (take the minimum to fit within bounds)
+            CGFloat uniformScale = MIN(pipScaleX, pipScaleY);
+            
+            // Calculate final dimensions using uniform scale
+            CGFloat finalPipWidth = webcamSize.width * uniformScale;
+            CGFloat finalPipHeight = webcamSize.height * uniformScale;
+            
+            // CRITICAL: Ensure minimum overlay size for visibility
+            // AVFoundation might not render overlays that are too small
+            const CGFloat MIN_PIP_WIDTH = 120.0;  // Minimum 120 pixels wide
+            const CGFloat MIN_PIP_HEIGHT = 120.0; // Minimum 120 pixels tall
+            
+            if (finalPipWidth < MIN_PIP_WIDTH || finalPipHeight < MIN_PIP_HEIGHT) {
+                NSLog(@"⚠️ PiP overlay is very small (%.0fx%.0f) - scaling up to minimum size for visibility", finalPipWidth, finalPipHeight);
+                
+                // Scale up to meet minimum size while preserving aspect ratio
+                CGFloat minScaleX = MIN_PIP_WIDTH / webcamSize.width;
+                CGFloat minScaleY = MIN_PIP_HEIGHT / webcamSize.height;
+                CGFloat minScale = MAX(minScaleX, minScaleY);
+                
+                // Use the larger of uniform scale or minimum scale
+                uniformScale = MAX(uniformScale, minScale);
+                
                 finalPipWidth = webcamSize.width * uniformScale;
                 finalPipHeight = webcamSize.height * uniformScale;
+                
+                NSLog(@"🔧 Adjusted PiP size to minimum: %.0fx%.0f (to ensure visibility)", finalPipWidth, finalPipHeight);
+            }
+            
+            NSLog(@"🔧 Webcam scaling: %.0fx%.0f -> %.0fx%.0f (scale: %.4fx, %.4fy, uniform: %.4f)", 
+                webcamSize.width, webcamSize.height, finalPipWidth, finalPipHeight, pipScaleX, pipScaleY, uniformScale);
+            NSLog(@"🔧 PiP position (top-left percentages): x=%.3f (%.0f px), y=%.3f (%.0f px)",
+                pipXPercentClamped, pipXFromLeft, pipYPercentClamped, pipYFromTop);
+            NSLog(@"🔧 Final PiP size: %.0fx%.0f (requested: %.0fx%.0f)", finalPipWidth, finalPipHeight, pipWidth, pipHeight);
+            
+            // CRITICAL: Validate bounds and ensure PiP is within render area
+            // AVFoundation may cull overlays that are outside bounds
+            CGFloat pipOriginX = pipXFromLeft;
+            CGFloat pipOriginY = renderSize.height - (pipYFromTop + finalPipHeight);
+
+            CGFloat pipTopFromBottom = pipOriginY + finalPipHeight;
+            NSLog(@"🔍 PiP bounds check (bottom-left render): left=%.0f, right=%.0f, bottom=%.0f, top=%.0f",
+                pipOriginX, pipOriginX + finalPipWidth, pipOriginY, pipTopFromBottom);
+
+            BOOL needsClamping = NO;
+            if (pipOriginX < 0) {
+                NSLog(@"⚠️ PiP X position is negative (%.0f) - clamping to 0", pipOriginX);
+                pipOriginX = 0;
+                needsClamping = YES;
+            }
+            if (pipOriginY < 0) {
+                NSLog(@"⚠️ PiP Y position (from bottom) is negative (%.0f) - clamping to 0", pipOriginY);
+                pipOriginY = 0;
+                pipYFromTop = renderSize.height - finalPipHeight;
+                needsClamping = YES;
+            }
+            if ((pipOriginX + finalPipWidth) > renderSize.width) {
+                NSLog(@"⚠️ PiP extends beyond right edge (%.0f > %.0f) - adjusting", pipOriginX + finalPipWidth, renderSize.width);
+                pipOriginX = renderSize.width - finalPipWidth;
+                needsClamping = YES;
+            }
+            if ((pipOriginY + finalPipHeight) > renderSize.height) {
+                NSLog(@"⚠️ PiP extends beyond top edge (%.0f > %.0f) - adjusting", pipOriginY + finalPipHeight, renderSize.height);
+                pipOriginY = renderSize.height - finalPipHeight;
+                pipYFromTop = 0;
+                needsClamping = YES;
             }
 
-            // Clamp position to bounds (top-left origin for CALayer)
-            pipXFromLeft = MAX(0, MIN(pipXFromLeft, renderSize.width - finalPipWidth));
-            pipYFromTop = MAX(0, MIN(pipYFromTop, renderSize.height - finalPipHeight));
+            if (needsClamping) {
+                NSLog(@"🔧 PiP position adjusted to left=%.0f (%.1f%%), bottom=%.0f (%.1f%%)",
+                    pipOriginX, (pipOriginX / renderSize.width) * 100.0,
+                    pipOriginY, (pipOriginY / renderSize.height) * 100.0);
+            } else {
+                NSLog(@"✅ PiP bounds are valid - fully within render area");
+            }
 
-            // Create transform for CALayer (top-left origin)
-            pipTransform = CGAffineTransformMakeScale(uniformScale, uniformScale);
-            pipTransform = CGAffineTransformTranslate(pipTransform, pipXFromLeft / uniformScale, pipYFromTop / uniformScale);
-
-            webcamTrack.enabled = YES;
+            // CRITICAL: Final bounds check after any clamping
+            if (pipOriginX < 0 || pipOriginY < 0 || (pipOriginX + finalPipWidth) > renderSize.width || (pipOriginY + finalPipHeight) > renderSize.height) {
+                NSLog(@"❌ ERROR: PiP bounds validation failed even after clamping!");
+                NSLog(@"   Left: %.0f, Bottom: %.0f, Size: %.0fx%.0f, Render: %.0fx%.0f",
+                    pipOriginX, pipOriginY, finalPipWidth, finalPipHeight, renderSize.width, renderSize.height);
+            }
+            
+            // Create transform for PiP positioning and scaling
+            // Use uniform scale to preserve aspect ratio
+            CGFloat pipScaleXForTransform = uniformScale;
+            CGFloat pipScaleYForTransform = uniformScale;
+            
+            // First, check if webcam track has a preferred transform (rotation/orientation)
+            CGAffineTransform preferredTransform = CGAffineTransformIdentity;
+            if (webcamTrack.segments.count > 0) {
                 AVCompositionTrackSegment* firstWebcamSegment = webcamTrack.segments.firstObject;
                 if (firstWebcamSegment != nil && firstWebcamSegment.sourceURL != nil) {
                     AVAsset* webcamSourceAsset = [AVAsset assetWithURL:firstWebcamSegment.sourceURL];
@@ -622,54 +776,68 @@ AVMutableVideoComposition* create_pip_composition(
                 AVMutableVideoCompositionLayerInstruction* layer = layerInstructions[i];
                 NSLog(@"   Layer[%lu]: trackID=%d", (unsigned long)i, (int)layer.trackID);
             }
+        } else {
+            if (webcamTrack == nil) {
+                NSLog(@"⚠️ No webcam track available for PiP overlay (webcamTrack is nil)");
+            } else if (webcamTrack.segments.count == 0) {
+                NSLog(@"❌ Webcam track exists but has no segments - PiP overlay will not be applied");
+            } else {
+                NSLog(@"⚠️ Webcam track validation failed - PiP overlay will not be applied");
+            }
         }
         
-        // Switch to CoreAnimationTool for elliptical PiP masking
-        // Create parent layer (render canvas, top-left origin for web-like ease)
-        CALayer *parentLayer = [CALayer layer];
-        parentLayer.frame = CGRectMake(0, 0, renderSize.width, renderSize.height);
-        parentLayer.geometryFlipped = YES;  // Flip y-axis to match web (y=0 at top)
-
-        // Background: Screen layer (full frame, your existing transform)
-        CALayer *screenLayer = [CALayer layer];
-        screenLayer.frame = CGRectMake(0, 0, renderSize.width, renderSize.height);
-        screenLayer.transform = CATransform3DMakeAffineTransform(screenTransform);  // Your scale/center
-        [parentLayer addSublayer:screenLayer];  // Bottom
-
-        // Overlay: Webcam PiP layer with elliptical mask
-        if (webcamTrack != nil && webcamTrack.segments.count > 0) {
-            CALayer *pipLayer = [CALayer layer];
-            pipLayer.frame = CGRectMake(pipXFromLeft, pipYFromTop, finalPipWidth, finalPipHeight);  // Top-left pos
-            pipLayer.transform = CATransform3DMakeAffineTransform(pipTransform);  // Your scale/pos
-            pipLayer.opacity = 1.0;
-
-            // Elliptical mask: CAShapeLayer with bezier path
-            CAShapeLayer *ellipseMask = [CAShapeLayer layer];
-            UIBezierPath *ellipsePath = [UIBezierPath bezierPathWithOvalInRect:pipLayer.bounds];  // Circle if square; ellipse if rect
-            ellipseMask.path = ellipsePath.CGPath;
-            pipLayer.mask = ellipseMask;  // Applies rounded clip
-
-            [parentLayer addSublayer:pipLayer];  // Top
-
-            NSLog(@"🔧 Elliptical mask applied: path bounds %@ (rounded PiP ready)", NSStringFromCGRect(pipLayer.bounds));
+        // Ensure webcam (PiP) renders on top: if both layers exist, put webcam first (top), screen second (bottom)
+        if (layerInstructions.count == 2) {
+            instruction.layerInstructions = @[layerInstructions[1], layerInstructions[0]];
+        } else {
+            instruction.layerInstructions = layerInstructions;
         }
-
-        // Tool: Binds layers to composition (replaces manual instructions)
-        AVVideoCompositionCoreAnimationTool *animationTool = [AVVideoCompositionCoreAnimationTool
-                                                               videoCompositionCoreAnimationToolWithPostProcessingAsVideoLayers:@[parentLayer]
-                                                               inLayer:parentLayer];
-        videoComposition.animationTool = animationTool;
-
-        // No manual instructions needed with animationTool
-        videoComposition.instructions = @[];
-
-        NSLog(@"✅ Video composition created with elliptical PiP");
+        videoComposition.instructions = @[instruction];
+        
+        NSLog(@"✅ Video composition created with PiP");
+        NSLog(@"📊 Final layer instructions: %lu layer(s)", (unsigned long)layerInstructions.count);
+        for (NSUInteger i = 0; i < layerInstructions.count; i++) {
+            AVMutableVideoCompositionLayerInstruction* layer = layerInstructions[i];
+            CMPersistentTrackID layerTrackID = layer.trackID;
+            
+            // Find the corresponding composition track
+            AVMutableCompositionTrack* correspondingTrack = nil;
+            for (AVMutableCompositionTrack* track in videoTracks) {
+                if (track.trackID == layerTrackID) {
+                    correspondingTrack = track;
+                    break;
+                }
+            }
+            
+            NSString* trackType = @"unknown";
+            if (correspondingTrack == screenTrack) {
+                trackType = @"screen (background)";
+            } else if (correspondingTrack == webcamTrack) {
+                trackType = @"webcam (PiP overlay)";
+            }
+            
+            NSLog(@"   Layer[%lu]: trackID=%d (%@, segments=%lu, enabled=%@)", 
+                (unsigned long)i, (int)layerTrackID, trackType,
+                (unsigned long)correspondingTrack.segments.count,
+                correspondingTrack.enabled ? @"YES" : @"NO");
+            
+            // Note: Transform and opacity verification was done earlier when setting them
+            // AVFoundation doesn't expose methods to query these values back, but we verified
+            // they were set correctly during the setup phase above
+        }
         
         // Verify video composition settings
         NSLog(@"📋 Video composition settings:");
         NSLog(@"   renderSize: %.0fx%.0f", videoComposition.renderSize.width, videoComposition.renderSize.height);
         NSLog(@"   frameDuration: %f seconds", CMTimeGetSeconds(videoComposition.frameDuration));
-        NSLog(@"   instructions count: %lu (using animationTool for elliptical PiP)", (unsigned long)videoComposition.instructions.count);
+        NSLog(@"   instructions count: %lu", (unsigned long)videoComposition.instructions.count);
+        if (videoComposition.instructions.count > 0) {
+            id<AVVideoCompositionInstruction> firstInstructionObj = videoComposition.instructions.firstObject;
+            if ([firstInstructionObj isKindOfClass:[AVMutableVideoCompositionInstruction class]]) {
+                AVMutableVideoCompositionInstruction* firstInstruction = (AVMutableVideoCompositionInstruction*)firstInstructionObj;
+                NSLog(@"   First instruction layerInstructions count: %lu", (unsigned long)firstInstruction.layerInstructions.count);
+            }
+        }
         
         return videoComposition;
     }

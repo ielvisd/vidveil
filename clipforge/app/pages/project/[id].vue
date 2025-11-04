@@ -678,6 +678,8 @@ const handleVideoLoaded = () => {
 	if (videoPlayer.value) {
 		initializePlayer(videoPlayer.value)
 	}
+	// Update container size now that video is loaded and wrapper exists
+	updateContainerSize()
 }
 
 const selectClip = (clip: any) => {
@@ -720,15 +722,46 @@ const selectClip = (clip: any) => {
 
 // Update container dimensions on mount and resize
 const updateContainerSize = () => {
-	if (videoContainer.value) {
+	// Use video-wrapper instead of video-container to match PiP overlay coordinate system
+	const videoWrapper = document.querySelector('.video-wrapper')
+	if (videoWrapper) {
+		const rect = videoWrapper.getBoundingClientRect()
+		containerWidth.value = rect.width
+		containerHeight.value = rect.height
+	} else if (videoContainer.value) {
+		// Fallback to video-container if video-wrapper doesn't exist yet
 		const rect = videoContainer.value.getBoundingClientRect()
 		containerWidth.value = rect.width
 		containerHeight.value = rect.height
 	}
 }
 
-const updatePipPosition = (x: number, y: number) => {
+const updatePipPosition = async (x: number, y: number) => {
+	// Update the position in the global PiP config
 	updatePosition(x, y)
+	
+	// Save the updated PiP config to the webcam clip's metadata
+	// Convert pixel coordinates to relative values (0.0-1.0) for resolution-independent positioning
+	if (webcamClip.value && pipConfig.value && containerWidth.value && containerHeight.value) {
+		const xRelative = x / containerWidth.value
+		const yRelative = y / containerHeight.value
+		const widthRelative = pipConfig.value.width / containerWidth.value
+		const heightRelative = pipConfig.value.height / containerHeight.value
+		
+		await updateClip(webcamClip.value.id, {
+			pip_config: {
+				shape: pipConfig.value.shape,
+				width: widthRelative,
+				height: heightRelative,
+				x: xRelative,
+				y: yRelative,
+				borderColor: pipConfig.value.borderColor,
+				borderWidth: pipConfig.value.borderWidth,
+				shadow: pipConfig.value.shadow
+			}
+		})
+		console.log('💾 Saved PiP position to clip (as relative coords 0.0-1.0):', { x: xRelative, y: yRelative, width: widthRelative, height: heightRelative })
+	}
 }
 
 const removePip = () => {
@@ -1024,7 +1057,7 @@ onMounted(async () => {
 	})
 	
 	// Watch upload states map directly
-	watch(uploadStates, (currentStates, previousStates) => {
+	watch(uploadStates, async (currentStates, previousStates) => {
 		if (!previousStates) {
 			// Initialize previous states on first watch
 			currentStates.forEach((state, clipId) => {
@@ -1032,6 +1065,9 @@ onMounted(async () => {
 			})
 			return
 		}
+
+		// Track if we need to refresh clips
+		let needsRefresh = false
 
 		// Check for state transitions
 		currentStates.forEach((currentState, clipId) => {
@@ -1049,6 +1085,8 @@ onMounted(async () => {
 					icon: storageType === 'cloud' ? 'i-heroicons-cloud-arrow-up' : 'i-heroicons-archive-box',
 					color: 'success'
 				})
+				// Mark for refresh to get final clip data from DB
+				needsRefresh = true
 			} else if (previousState === 'uploading' && currentState === 'failed') {
 				toast.add({
 					title: 'Upload failed',
@@ -1061,6 +1099,56 @@ onMounted(async () => {
 			// Update previous state
 			previousUploadStates.value.set(clipId, currentState)
 		})
+
+		// Refresh clips from database when uploads complete
+		if (needsRefresh && projectId) {
+			console.log('🔄 Refreshing clips after upload completion...')
+			await fetchClips(projectId)
+			
+			// Re-initialize video player with updated clips
+			await nextTick(async () => {
+				// Re-select active clip if it was already set
+				if (activeClip.value) {
+					const updatedActiveClip = clips.value.find(c => c.id === activeClip.value?.id)
+					if (updatedActiveClip) {
+						activeClip.value = updatedActiveClip
+						console.log('🔄 Re-initialized active clip:', updatedActiveClip.name)
+					}
+				} else {
+					// Auto-select first non-webcam clip if no active clip
+					const screenClip = clips.value.find((c: any) => c.metadata?.type !== 'webcam')
+					if (screenClip) {
+						activeClip.value = screenClip
+						console.log('🎬 Auto-selected screen clip:', screenClip.name)
+					}
+				}
+				
+				// Re-initialize webcam clip if it was already set
+				if (webcamClip.value) {
+					const updatedWebcamClip = clips.value.find(c => c.id === webcamClip.value?.id)
+					if (updatedWebcamClip) {
+						webcamClip.value = updatedWebcamClip
+						console.log('🔄 Re-initialized webcam clip:', updatedWebcamClip.name)
+					}
+				} else {
+					// Auto-setup webcam if available
+					const webcam = clips.value.find((c: any) => c.metadata?.type === 'webcam')
+					if (webcam) {
+						webcamClip.value = webcam
+						setWebcamClip(webcam.id)
+						console.log('📷 Auto-selected webcam clip:', webcam.name)
+					}
+				}
+				
+				// Re-initialize player with updated video element
+				await nextTick(() => {
+					if (videoPlayer.value && activeClip.value) {
+						initializePlayer(videoPlayer.value)
+						console.log('✅ Video player re-initialized')
+					}
+				})
+			})
+		}
 
 		// Clean up states for clips that no longer exist
 		previousUploadStates.value.forEach((_, clipId) => {
@@ -1089,6 +1177,13 @@ const handleClipsChange = debounce((newClips: any[]) => {
 }, 100)
 
 watch(sortedClips, handleClipsChange, { immediate: false })
+
+// Update container size when active clip changes (video dimensions might change)
+watch(activeClip, () => {
+	nextTick(() => {
+		updateContainerSize()
+	})
+})
 
 onUnmounted(() => {
 	window.removeEventListener('keydown', handleKeyPress)
@@ -1396,6 +1491,31 @@ const applyShape = async (shape: string) => {
 	} else {
 		await applyPipShape(shape as any, clipIdToUse, undefined, containerDims)
 	}
+	
+	// Save the PiP config to the webcam clip after shape is applied
+	// Convert pixel coordinates to relative values (0.0-1.0) for resolution-independent positioning
+	await nextTick(async () => {
+		if (webcamClip.value && pipConfig.value && containerWidth.value && containerHeight.value) {
+			const xRelative = pipConfig.value.x / containerWidth.value
+			const yRelative = pipConfig.value.y / containerHeight.value
+			const widthRelative = pipConfig.value.width / containerWidth.value
+			const heightRelative = pipConfig.value.height / containerHeight.value
+			
+			await updateClip(webcamClip.value.id, {
+				pip_config: {
+					shape: pipConfig.value.shape,
+					width: widthRelative,
+					height: heightRelative,
+					x: xRelative,
+					y: yRelative,
+					borderColor: pipConfig.value.borderColor,
+					borderWidth: pipConfig.value.borderWidth,
+					shadow: pipConfig.value.shadow
+				}
+			})
+			console.log('💾 Saved PiP config to clip (as relative coords 0.0-1.0):', { x: xRelative, y: yRelative, width: widthRelative, height: heightRelative })
+		}
+	})
 }
 
 const removeClip = async () => {

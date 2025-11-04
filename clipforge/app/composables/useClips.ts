@@ -312,8 +312,21 @@ export const useClips = () => {
 			// Filter out null clips (missing from IndexedDB)
 			const validClips = clipsWithUrls.filter(c => c !== null) as any[]
 			
-			console.log(`📊 Fetched ${validClips.length} valid clips from ${(data || []).length} total clips`)
-			clips.value = validClips
+			// Preserve clips that are currently uploading
+			// These clips exist in local state but not in DB yet
+			const uploadingClips = clips.value.filter(clip => 
+				uploadStates.value.get(clip.id) === 'uploading' && 
+				!validClips.some(c => c.id === clip.id)
+			)
+			
+			if (uploadingClips.length > 0) {
+				console.log(`📤 Preserving ${uploadingClips.length} uploading clips:`, uploadingClips.map(c => c.name))
+			}
+			
+			// Merge: keep uploading clips + fetched clips
+			clips.value = [...uploadingClips, ...validClips]
+			
+			console.log(`📊 Fetched ${validClips.length} valid clips from ${(data || []).length} total clips (${uploadingClips.length} uploading)`)
 
 			return { clips: clips.value, error: null }
 		} catch (error: any) {

@@ -25,15 +25,14 @@ export interface Clip {
 }
 
 export interface PipConfig {
-	id: string
-	clip_id: string
-	shape_type: string
-	shape_path?: string
-	shape_params: Record<string, any>
-	position: { x: number; y: number }
-	animations: any[]
-	created_at: string
-	updated_at: string
+	shape: string
+	width: number
+	height: number
+	x: number
+	y: number
+	borderColor?: string
+	borderWidth?: number
+	shadow?: boolean
 }
 
 export interface ProjectWithClips extends Project {

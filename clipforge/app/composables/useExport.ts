@@ -112,7 +112,37 @@ export const useExport = () => {
 			// Create PiP composition if webcam clip exists
 			let pipComposition = null
 			if (webcamClip && webcamClip.pip_config) {
-				pipComposition = createPipComposition(orderedClips, webcamClip.pip_config)
+				// Get the screen recording dimensions to convert relative PiP config (0.0-1.0) to pixels
+				const screenVideoElement = document.createElement('video')
+				screenVideoElement.src = screenClip.src
+				
+				// Wait for video metadata to load to get dimensions
+				await new Promise<void>((resolve) => {
+					screenVideoElement.onloadedmetadata = () => resolve()
+					screenVideoElement.load()
+				})
+				
+				const videoWidth = screenVideoElement.videoWidth || 1920
+				const videoHeight = screenVideoElement.videoHeight || 1080
+				
+				// Convert relative coordinates (0.0-1.0) to pixels
+				const pipConfigInPixels = {
+					shape: webcamClip.pip_config.shape,
+					x: Math.round(webcamClip.pip_config.x * videoWidth),
+					y: Math.round(webcamClip.pip_config.y * videoHeight),
+					width: Math.round(webcamClip.pip_config.width * videoWidth),
+					height: Math.round(webcamClip.pip_config.height * videoHeight),
+					borderWidth: webcamClip.pip_config.borderWidth,
+					borderColor: webcamClip.pip_config.borderColor
+				}
+				
+				console.log('🎬 Converting PiP config from relative (0.0-1.0) to pixels:', {
+					videoSize: { videoWidth, videoHeight },
+					relative: webcamClip.pip_config,
+					pixels: pipConfigInPixels
+				})
+				
+				pipComposition = createPipComposition(orderedClips, pipConfigInPixels)
 			}
 
 			// Plan the composition workflow

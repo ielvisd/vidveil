@@ -226,18 +226,28 @@ export const useNativeVideoExport = () => {
         console.warn(`⚠️ Clip ${index} [${clipType}] has unexpected src format: ${clip.src}`)
       }
       
+      // Convert percentage-based PiP config to pixels if needed
+      let pipConfig = undefined
+      if (clip.pip_config && clipType === 'webcam') {
+        // For native export, we need to convert percentages to pixels
+        // based on the screen clip's dimensions
+        // For now, pass percentages and let Rust handle conversion
+        pipConfig = {
+          x: clip.pip_config.x,
+          y: clip.pip_config.y,
+          width: clip.pip_config.width,
+          height: clip.pip_config.height,
+          shape: clip.pip_config.shape || 'circle'
+        }
+        console.log(`📐 PiP config for clip ${index}:`, pipConfig)
+      }
+      
       return {
         path: clipPath,
         start_time: clip.start_time || 0,
         duration: clip.duration,
         clip_type: clipType,
-        pip_config: clip.pip_config && clip.pip_config.position ? {
-          x: clip.pip_config.position.x,
-          y: clip.pip_config.position.y,
-          width: clip.pip_config.shape_params?.width || 0.2,
-          height: clip.pip_config.shape_params?.height || 0.2,
-          shape: clip.pip_config.shape_type || 'rectangle'
-        } : undefined
+        pip_config: pipConfig
       }
     }))
     
